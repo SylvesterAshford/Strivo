@@ -1,32 +1,47 @@
-import { UserButton } from "@clerk/nextjs";
 import { requireWorkspace } from "@/lib/workspace";
+import { db } from "@/db/client";
+import { entities, edges, materials } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { HomeView } from "@/components/HomeView";
+import { ColdStartView } from "@/components/ColdStartView";
 
 export default async function HomePage() {
   const workspace = await requireWorkspace();
 
-  return (
-    <div className="min-h-screen bg-[#FBFAF7] text-[#2A2A26]">
-      <header className="flex h-14 items-center justify-between border-b border-[#DDDAD0] bg-white px-6">
-        <div className="flex items-baseline gap-3">
-          <span className="text-[15px] font-medium tracking-[0.02em]">LATTICE</span>
-          <span className="text-[13px] text-[#6B675D]">{workspace.name}</span>
-        </div>
-        <UserButton />
-      </header>
+  const materialCount = await db.$count(materials, eq(materials.workspaceId, workspace.id));
 
-      <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center p-8">
-        <div className="text-center max-w-md">
-          <p className="text-[11px] uppercase tracking-[0.08em] text-[#9C9890] mb-4">
-            PHASE 1 PLACEHOLDER
-          </p>
-          <h1 className="text-2xl font-semibold tracking-[-0.024em] text-[#111110] mb-4">
-            Welcome.
-          </h1>
-          <p className="text-[13px] leading-relaxed text-[#6B675D]">
-            Your workspace is ready. The upload flow and graph come in phase 2.
-          </p>
-        </div>
-      </main>
-    </div>
+  if (materialCount === 0) {
+    return <ColdStartView />;
+  }
+
+  const allEntities = await db.query.entities.findMany({
+    where: eq(entities.workspaceId, workspace.id),
+  });
+
+  const allEdges = await db.query.edges.findMany({
+    where: eq(edges.workspaceId, workspace.id),
+  });
+
+  return (
+    <HomeView
+      workspace={{ id: workspace.id, name: workspace.name }}
+      nodes={allEntities.map((e) => ({
+        id: e.id,
+        name: e.name,
+        kind: e.kind,
+        summary: e.summary ?? null,
+        positionX: e.positionX ?? null,
+        positionY: e.positionY ?? null,
+        connectionCount: e.connectionCount ?? 0,
+        hidden: e.hidden ?? false,
+      }))}
+      edges={allEdges.map((e) => ({
+        id: e.id,
+        fromId: e.fromEntityId,
+        toId: e.toEntityId,
+        kind: e.kind as "quiet" | "active" | "strong" | "tension",
+        weight: e.weight ?? 1,
+      }))}
+    />
   );
 }
