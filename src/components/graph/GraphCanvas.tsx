@@ -65,7 +65,10 @@ export function GraphCanvas({ nodes, edges, onNodeClick, onNodeRightClick }: Pro
   }, []);
 
   useEffect(() => {
-    if (nodes.length === 0) return;
+    if (nodes.length === 0) {
+      setSimNodes([]);
+      return;
+    }
 
     const simNodesCopy: SimNode[] = nodes.map((n) => ({
       ...n,
