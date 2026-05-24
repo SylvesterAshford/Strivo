@@ -39,6 +39,18 @@ export async function GET(
         );
       };
 
+      function friendlyError(err: unknown): string {
+        const raw = err instanceof Error ? err.message : String(err);
+        const jsonStart = raw.indexOf("{");
+        if (jsonStart !== -1) {
+          try {
+            const parsed = JSON.parse(raw.slice(jsonStart)) as { error?: { message?: string } };
+            if (parsed.error?.message) return parsed.error.message;
+          } catch { /* not JSON */ }
+        }
+        return raw;
+      }
+
       try {
         send("status", { step: "reading", message: "Reading document..." });
         await db.update(materials)
@@ -130,10 +142,20 @@ export async function GET(
 
         send("status", { step: "linking", message: "Linking material to entities..." });
 
-        const passages = await extractPassages({
-          text: material.contentText.slice(0, ZEP_MAX_CHARS),
-          entities: zepEntities.map((e) => ({ id: e.id, name: e.name })),
-        });
+        let passages: Awaited<ReturnType<typeof extractPassages>> = [];
+        try {
+          passages = await extractPassages({
+            text: material.contentText.slice(0, ZEP_MAX_CHARS),
+            entities: zepEntities.map((e) => ({ id: e.id, name: e.name })),
+          });
+        } catch (passageErr) {
+          log({
+            level: "warn",
+            message: "material.passage_extraction_failed",
+            workspaceId: ws.id,
+            meta: { materialId, error: friendlyError(passageErr) },
+          });
+        }
 
         for (const p of passages) {
           await db.insert(mentions).values({
@@ -171,7 +193,7 @@ export async function GET(
           meta: { materialId, entitiesAdded, entitiesUpdated, edgesAdded },
         });
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : "Unknown error";
+        const message = friendlyError(err);
         log({
           level: "error",
           message: "material.processing_failed",
