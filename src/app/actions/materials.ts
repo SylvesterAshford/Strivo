@@ -55,11 +55,37 @@ export async function deleteMaterial(materialId: string) {
 
   await db.delete(mentions).where(eq(mentions.materialId, materialId));
 
-  if (orphanedEntityIds.length > 0) {
+  // Also catch entities with zero total mentions (e.g. when Anthropic extraction was skipped).
+  // These are workspace entities that don't appear in any material's mention list.
+  const mentionedRows = await db.selectDistinct({ entityId: mentions.entityId }).from(mentions);
+  const mentionedIds = new Set(mentionedRows.map((r) => r.entityId));
+  const workspaceEntities = await db.query.entities.findMany({
+    where: eq(entities.workspaceId, material.workspaceId),
+    columns: { id: true },
+  });
+  const unmentionedIds = workspaceEntities.map((e) => e.id).filter((id) => !mentionedIds.has(id));
+  for (const id of unmentionedIds) {
+    if (!orphanedEntityIds.includes(id)) orphanedEntityIds.push(id);
+  }
+
+  if (unmentionedIds.length > 0) {
+    await db.delete(edges).where(
+      and(
+        eq(edges.workspaceId, material.workspaceId),
+        or(
+          inArray(edges.fromEntityId, unmentionedIds),
+          inArray(edges.toEntityId, unmentionedIds),
+        ),
+      ),
+    );
+    await db.delete(entities).where(inArray(entities.id, unmentionedIds));
+  } else if (orphanedEntityIds.length > 0) {
     await db.delete(entities).where(inArray(entities.id, orphanedEntityIds));
   }
 
-  const survivingIds = entityIdsInThisMaterial.filter((id) => !orphanedEntityIds.includes(id));
+  const survivingIds = workspaceEntities
+    .map((e) => e.id)
+    .filter((id) => !orphanedEntityIds.includes(id));
   for (const eid of survivingIds) {
     const count = await db.$count(
       edges,
