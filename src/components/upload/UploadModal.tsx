@@ -6,9 +6,10 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FileDropZone } from "./FileDropZone";
 import { PasteInput } from "./PasteInput";
+import { UrlInput } from "./UrlInput";
 import { ProcessingView } from "./ProcessingView";
 
-type Mode = "file" | "paste";
+type Mode = "file" | "paste" | "url";
 type State =
   | { kind: "input" }
   | { kind: "uploading" }
@@ -21,6 +22,7 @@ export function UploadModal({ open, onClose }: { open: boolean; onClose: () => v
   const [state, setState] = useState<State>({ kind: "input" });
   const [file, setFile] = useState<File | null>(null);
   const [pastedText, setPastedText] = useState("");
+  const [urlValue, setUrlValue] = useState("");
   const [contextNote, setContextNote] = useState("");
   const router = useRouter();
 
@@ -37,6 +39,9 @@ export function UploadModal({ open, onClose }: { open: boolean; onClose: () => v
     } else if (mode === "paste" && pastedText.trim()) {
       formData.append("kind", "text");
       formData.append("text", pastedText);
+    } else if (mode === "url" && urlValue.trim()) {
+      formData.append("kind", "url");
+      formData.append("url", urlValue.trim());
     } else {
       setState({ kind: "error", message: "Please provide content to upload." });
       return;
@@ -57,7 +62,7 @@ export function UploadModal({ open, onClose }: { open: boolean; onClose: () => v
         message: err instanceof Error ? err.message : "Network error.",
       });
     }
-  }, [mode, file, pastedText, contextNote]);
+  }, [mode, file, pastedText, urlValue, contextNote]);
 
   const handleDone = useCallback(() => {
     onClose();
@@ -65,8 +70,14 @@ export function UploadModal({ open, onClose }: { open: boolean; onClose: () => v
     setState({ kind: "input" });
     setFile(null);
     setPastedText("");
+    setUrlValue("");
     setContextNote("");
   }, [onClose, router]);
+
+  const isSubmitDisabled =
+    (mode === "file" && !file) ||
+    (mode === "paste" && pastedText.trim().length < 10) ||
+    (mode === "url" && !urlValue.trim());
 
   return (
     <Modal open={open} onClose={canClose ? onClose : undefined}>
@@ -80,37 +91,28 @@ export function UploadModal({ open, onClose }: { open: boolean; onClose: () => v
               What did you find?
             </h2>
             <p className="text-[13px] text-[#6B675D] mb-6">
-              Drop a document or paste text. Lattice will extract entities and update the graph.
+              Drop a document, paste text, or link an article. Lattice will extract entities and update the graph.
             </p>
 
             <div className="flex gap-1 mb-4 border-b border-[#ECEAE3]">
-              <button
-                onClick={() => setMode("file")}
-                className={`px-3 py-2 text-[12px] font-medium transition-colors ${
-                  mode === "file"
-                    ? "text-[#111110] border-b-2 border-[#C9512D] -mb-px"
-                    : "text-[#6B675D] hover:text-[#2D2D2A]"
-                }`}
-              >
-                File
-              </button>
-              <button
-                onClick={() => setMode("paste")}
-                className={`px-3 py-2 text-[12px] font-medium transition-colors ${
-                  mode === "paste"
-                    ? "text-[#111110] border-b-2 border-[#C9512D] -mb-px"
-                    : "text-[#6B675D] hover:text-[#2D2D2A]"
-                }`}
-              >
-                Paste
-              </button>
+              {(["file", "paste", "url"] as Mode[]).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setMode(m)}
+                  className={`px-3 py-2 text-[12px] font-medium capitalize transition-colors ${
+                    mode === m
+                      ? "text-[#111110] border-b-2 border-[#C9512D] -mb-px"
+                      : "text-[#6B675D] hover:text-[#2D2D2A]"
+                  }`}
+                >
+                  {m === "url" ? "URL" : m === "paste" ? "Paste" : "File"}
+                </button>
+              ))}
             </div>
 
-            {mode === "file" ? (
-              <FileDropZone file={file} onFileChange={setFile} />
-            ) : (
-              <PasteInput value={pastedText} onChange={setPastedText} />
-            )}
+            {mode === "file" && <FileDropZone file={file} onFileChange={setFile} />}
+            {mode === "paste" && <PasteInput value={pastedText} onChange={setPastedText} />}
+            {mode === "url" && <UrlInput value={urlValue} onChange={setUrlValue} />}
 
             <div className="mt-5">
               <label className="block text-[11px] uppercase tracking-[0.08em] font-medium text-[#9C9890] mb-2">
@@ -126,19 +128,14 @@ export function UploadModal({ open, onClose }: { open: boolean; onClose: () => v
             </div>
 
             <div className="flex justify-between items-center mt-8">
-              <span className="text-[12px] text-[#9C9890]">PDF, MD, TXT, DOCX. Up to 50MB.</span>
+              <span className="text-[12px] text-[#9C9890]">
+                {mode === "file" ? "PDF, MD, TXT, DOCX. Up to 50MB." : mode === "url" ? "Article URL (HTTP/HTTPS)." : ""}
+              </span>
               <div className="flex gap-2">
                 <Button variant="ghost" onClick={onClose}>
                   Cancel
                 </Button>
-                <Button
-                  variant="primary"
-                  onClick={handleSubmit}
-                  disabled={
-                    (mode === "file" && !file) ||
-                    (mode === "paste" && pastedText.trim().length < 10)
-                  }
-                >
+                <Button variant="primary" onClick={handleSubmit} disabled={isSubmitDisabled}>
                   Add to graph
                 </Button>
               </div>

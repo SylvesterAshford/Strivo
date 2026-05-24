@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { put } from "@vercel/blob";
 import { db } from "@/db/client";
 import { materials } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -9,6 +10,7 @@ import { contentHash } from "@/lib/content-hash";
 import { extractPdf } from "@/lib/extract/pdf";
 import { extractDocx } from "@/lib/extract/docx";
 import { extractText } from "@/lib/extract/text";
+import { extractUrl } from "@/lib/extract/url";
 import { log } from "@/lib/log";
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
@@ -21,13 +23,14 @@ export async function POST(req: NextRequest) {
   const formData = await req.formData();
   const kind = formData.get("kind");
 
-  if (kind !== "file" && kind !== "text") {
+  if (kind !== "file" && kind !== "text" && kind !== "url") {
     return NextResponse.json({ error: "Invalid upload kind" }, { status: 400 });
   }
 
   let title: string;
   let contentText: string;
   let storagePath: string | null = null;
+  let sourceUrl: string | null = null;
 
   if (kind === "file") {
     const file = formData.get("file");
@@ -51,8 +54,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Unsupported file type: .${ext}` }, { status: 400 });
     }
 
-    // Vercel Blob upload skipped until BLOB_READ_WRITE_TOKEN is provisioned.
+    const blob = await put(
+      `materials/${workspace.id}/${createId()}-${file.name}`,
+      file,
+      { access: "private", addRandomSuffix: false },
+    );
+    storagePath = blob.url;
     title = file.name;
+  } else if (kind === "url") {
+    const url = formData.get("url");
+    if (typeof url !== "string" || !url.trim()) {
+      return NextResponse.json({ error: "URL required" }, { status: 400 });
+    }
+    let extracted;
+    try {
+      extracted = await extractUrl(url.trim());
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "URL extraction failed";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+    contentText = extracted.content;
+    title = extracted.title;
+    sourceUrl = url.trim();
   } else {
     const pasted = formData.get("text");
     if (typeof pasted !== "string" || pasted.trim().length < 10) {
@@ -89,9 +112,9 @@ export async function POST(req: NextRequest) {
   await db.insert(materials).values({
     id: materialId,
     workspaceId: workspace.id,
-    kind: kind === "file" ? "file" : "text",
+    kind: kind === "file" ? "file" : kind === "url" ? "url" : "text",
     title,
-    sourceUrl: null,
+    sourceUrl,
     storagePath,
     contentText,
     contentHash: hash,

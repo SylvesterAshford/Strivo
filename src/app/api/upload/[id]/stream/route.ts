@@ -3,9 +3,10 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/client";
 import { materials, entities, edges, mentions, workspaces } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { ensureGroup, ingestText, getEntities, getEdges, waitForExtraction } from "@/lib/zep";
+import { ensureGroup, ingestText, getEntities, getEdges, waitForExtraction, ZEP_MAX_CHARS } from "@/lib/zep";
 import { createId } from "@/lib/id";
 import { log } from "@/lib/log";
+import { extractPassages } from "@/lib/extract/llm-passages";
 
 export const maxDuration = 60;
 
@@ -129,18 +130,20 @@ export async function GET(
 
         send("status", { step: "linking", message: "Linking material to entities..." });
 
-        for (const ze of zepEntities) {
-          const passage = findPassage(material.contentText, ze.name);
-          if (passage) {
-            await db.insert(mentions).values({
-              id: `mn_${createId()}`,
-              materialId: material.id,
-              entityId: ze.id,
-              passage: passage.text,
-              passageStart: passage.start,
-              passageEnd: passage.end,
-            });
-          }
+        const passages = await extractPassages({
+          text: material.contentText.slice(0, ZEP_MAX_CHARS),
+          entities: zepEntities.map((e) => ({ id: e.id, name: e.name })),
+        });
+
+        for (const p of passages) {
+          await db.insert(mentions).values({
+            id: `mn_${createId()}`,
+            materialId: material.id,
+            entityId: p.entityId,
+            passage: p.passage,
+            passageStart: p.start,
+            passageEnd: p.end,
+          });
         }
 
         await db
@@ -193,24 +196,4 @@ export async function GET(
       Connection: "keep-alive",
     },
   });
-}
-
-function findPassage(
-  text: string,
-  name: string,
-): { text: string; start: number; end: number } | null {
-  const lowerText = text.toLowerCase();
-  const lowerName = name.toLowerCase();
-  const idx = lowerText.indexOf(lowerName);
-  if (idx === -1) return null;
-
-  let start = idx;
-  while (start > 0 && start > idx - 150 && !".!?\n".includes(text[start - 1])) start--;
-  while (start < text.length && /\s/.test(text[start])) start++;
-
-  let end = idx + name.length;
-  while (end < text.length && end < idx + 200 && !".!?\n".includes(text[end])) end++;
-  if (end < text.length) end++;
-
-  return { text: text.slice(start, end).trim(), start, end };
 }

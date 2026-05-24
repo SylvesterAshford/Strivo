@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { pinEntity, hideEntity } from "@/app/actions/entities";
 
 interface Props {
@@ -12,6 +13,8 @@ interface Props {
 
 export function NodeContextMenu({ entityId, x, y, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -26,7 +29,9 @@ export function NodeContextMenu({ entityId, x, y, onClose }: Props) {
       label: "Open drill-down",
       action: () => {
         onClose();
-        alert("Coming in phase 3.");
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("node", entityId);
+        router.push(`/?${params.toString()}`, { scroll: false });
       },
     },
     {
