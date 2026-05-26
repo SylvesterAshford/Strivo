@@ -1,8 +1,5 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { env } from "@/lib/env";
 import { z } from "zod";
-
-const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+import { getLLM } from "@/lib/llm";
 
 const PassageSchema = z.object({
   entityName: z.string(),
@@ -24,7 +21,6 @@ export async function extractPassages(params: {
   const prompt = `You are extracting mention spans from a document.
 
 For each entity below, find the single most representative passage in the document that mentions it.
-Return JSON only. No markdown, no commentary.
 
 Entities to find:
 ${entityList}
@@ -40,34 +36,22 @@ For each entity that is genuinely mentioned in the document, return an object wi
   "start": the character offset where the passage begins in the document
   "end": the character offset where the passage ends
 
-If an entity is not mentioned in the document, skip it. Do not invent passages.
+If an entity is not mentioned in the document, skip it. Do not invent passages.`;
 
-Return a JSON array of these objects.`;
-
-  const response = await client.messages.create({
-    model: "claude-haiku-4-5",
-    max_tokens: 4096,
-    messages: [{ role: "user", content: prompt }],
-  });
-
-  const textBlock = response.content.find((b) => b.type === "text");
-  if (!textBlock || textBlock.type !== "text") return [];
-
-  const jsonMatch = textBlock.text.match(/\[[\s\S]*\]/);
-  if (!jsonMatch) return [];
-
-  let parsed: unknown;
+  let result: z.infer<typeof PassageListSchema>;
   try {
-    parsed = JSON.parse(jsonMatch[0]);
+    result = await getLLM().structured(prompt, {
+      schema: PassageListSchema,
+      maxTokens: 4096,
+      workKind: "fast",
+      retryOnInvalid: false,
+    });
   } catch {
     return [];
   }
 
-  const validated = PassageListSchema.safeParse(parsed);
-  if (!validated.success) return [];
-
   const nameToId = new Map(params.entities.map((e) => [e.name.toLowerCase(), e.id]));
-  return validated.data
+  return result
     .map((p) => {
       const id = nameToId.get(p.entityName.toLowerCase());
       if (!id) return null;

@@ -17,12 +17,21 @@ import {
   SimulationLinkDatum,
 } from "d3-force";
 import type { GraphNode, GraphEdge } from "@/types/graph";
+import type { CommitData } from "@/types/branches";
 
 interface Props {
   nodes: GraphNode[];
   edges: GraphEdge[];
   onNodeClick?: (id: string) => void;
   onNodeRightClick?: (id: string, x: number, y: number) => void;
+  // Hypothetical mode
+  involvedSet?: Set<string> | null;
+  projectedEntities?: Array<{ name: string; kind: string; id: string }>;
+  hypothetical?: boolean;
+  // Play controllers
+  playHistoryCutoff?: Date | null;
+  playForwardCutoff?: number | null;
+  mainCommits?: CommitData[];
 }
 
 interface SimNode extends GraphNode, SimulationNodeDatum {
@@ -49,14 +58,26 @@ const KIND_COLORS: Record<string, string> = {
   default: "#6B675D",
 };
 
-export function GraphCanvas({ nodes, edges, onNodeClick, onNodeRightClick }: Props) {
+export function GraphCanvas({
+  nodes,
+  edges,
+  onNodeClick,
+  onNodeRightClick,
+  involvedSet,
+  projectedEntities = [],
+  hypothetical = false,
+  playHistoryCutoff,
+  playForwardCutoff,
+  mainCommits = [],
+}: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [view, setView] = useState({ x: 0, y: 0, k: 1 });
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [simNodes, setSimNodes] = useState<SimNode[]>([]);
   const [pan, setPan] = useState<{ ox: number; oy: number } | null>(null);
+  const [pulsing, setPulsing] = useState<Set<string>>(new Set());
+  const prevForwardCutoff = useRef<number | null>(null);
 
-  // Initialize view.x/y to center of container once mounted
   useLayoutEffect(() => {
     if (svgRef.current) {
       const { width, height } = svgRef.current.getBoundingClientRect();
@@ -102,7 +123,6 @@ export function GraphCanvas({ nodes, edges, onNodeClick, onNodeRightClick }: Pro
         forceCollide<SimNode>().radius((d) => 12 + Math.min(d.connectionCount, 8)),
       );
 
-    // Pin nodes that have saved positions
     simNodesCopy.forEach((n) => {
       if (n.positionX !== null && n.positionY !== null) {
         n.fx = n.positionX;
@@ -118,6 +138,28 @@ export function GraphCanvas({ nodes, edges, onNodeClick, onNodeRightClick }: Pro
 
     return () => { sim.stop(); };
   }, [nodes, edges]);
+
+  // Pulse entities when play-forward cutoff passes a main commit
+  useEffect(() => {
+    if (playForwardCutoff == null) {
+      prevForwardCutoff.current = null;
+      return;
+    }
+    const prev = prevForwardCutoff.current ?? 0;
+    prevForwardCutoff.current = playForwardCutoff;
+
+    const justPassed = mainCommits.filter(
+      (c) => c.t > prev && c.t <= playForwardCutoff,
+    );
+    if (justPassed.length === 0) return;
+
+    const ids = new Set(justPassed.flatMap((c) => c.affectedEntityIds));
+    if (ids.size === 0) return;
+
+    setPulsing(ids);
+    const timer = setTimeout(() => setPulsing(new Set()), 600);
+    return () => clearTimeout(timer);
+  }, [playForwardCutoff, mainCommits]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
@@ -169,6 +211,15 @@ export function GraphCanvas({ nodes, edges, onNodeClick, onNodeRightClick }: Pro
 
   const byId = new Map(simNodes.map((n) => [n.id, n]));
 
+  // Nodes visible in play-history mode
+  const visibleNodeIds = playHistoryCutoff
+    ? new Set(simNodes.filter((n) => n.firstSeenAt <= playHistoryCutoff).map((n) => n.id))
+    : null;
+
+  const visibleEdgeIds = playHistoryCutoff
+    ? new Set(edges.filter((e) => e.validFrom <= playHistoryCutoff).map((e) => e.id))
+    : null;
+
   return (
     <svg
       ref={svgRef}
@@ -178,18 +229,30 @@ export function GraphCanvas({ nodes, edges, onNodeClick, onNodeRightClick }: Pro
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
-      style={{ cursor: pan ? "grabbing" : "default", background: "#FBFAF7" }}
+      style={{ cursor: pan ? "grabbing" : "default", background: "transparent" }}
     >
       <g transform={`translate(${view.x}, ${view.y}) scale(${view.k})`}>
         {edges.map((edge) => {
+          if (visibleEdgeIds && !visibleEdgeIds.has(edge.id)) return null;
+
           const from = byId.get(edge.fromId);
           const to = byId.get(edge.toId);
           if (!from || !to) return null;
+
           const isConnected =
             connectedIds &&
             connectedIds.has(edge.fromId) &&
             connectedIds.has(edge.toId);
-          const opacity = !connectedIds ? 0.6 : isConnected ? 1 : 0.15;
+
+          // Hypothetical mode: dim edges where at least one endpoint is uninvolved
+          const bothInvolved =
+            !hypothetical ||
+            !involvedSet ||
+            (involvedSet.has(edge.fromId) && involvedSet.has(edge.toId));
+
+          const baseOpacity = !connectedIds ? 0.6 : isConnected ? 1 : 0.15;
+          const opacity = hypothetical && !bothInvolved ? 0.25 : baseOpacity;
+
           const stroke =
             edge.kind === "active"
               ? "#C9512D"
@@ -215,18 +278,51 @@ export function GraphCanvas({ nodes, edges, onNodeClick, onNodeRightClick }: Pro
 
         {simNodes.map((node) => {
           if (node.hidden) return null;
-          const radius = 6 + Math.min(node.connectionCount, 12) * 1.2;
+          if (visibleNodeIds && !visibleNodeIds.has(node.id)) return null;
+
+          const isInvolved = involvedSet?.has(node.id) ?? false;
+          const isUserNode = node.kind === "you";
+          const isPulsing = pulsing.has(node.id);
+
+          const baseRadius = 6 + Math.min(node.connectionCount, 12) * 1.2;
+          const visualRadius = !hypothetical
+            ? baseRadius
+            : (isInvolved ? baseRadius + 1 : (isUserNode ? baseRadius : Math.max(3, baseRadius - 1)));
+
+          const visualOpacity = !hypothetical
+            ? 1
+            : (isInvolved || isUserNode) ? 1 : 0.35;
+
           const fill = KIND_COLORS[node.kind] ?? KIND_COLORS.default;
           const isHovered = hoveredId === node.id;
-          const dimmed = connectedIds && !connectedIds.has(node.id) ? 0.35 : 1;
+          const hoverDim = connectedIds && !connectedIds.has(node.id) ? 0.35 : 1;
+          const finalOpacity = visualOpacity * hoverDim;
 
           return (
-            <g key={node.id} opacity={dimmed} style={{ transition: "opacity 120ms" }}>
-              <circle cx={node.x} cy={node.y} r={radius} fill={fill} />
+            <g key={node.id} opacity={finalOpacity} style={{ transition: "opacity 120ms" }}>
+              <circle
+                cx={node.x}
+                cy={node.y}
+                r={isPulsing ? visualRadius * 1.6 : visualRadius}
+                fill={fill}
+                style={{ transition: isPulsing ? "r 100ms ease-out" : "r 400ms ease-out" }}
+              />
+              {hypothetical && isInvolved && (
+                <circle
+                  cx={node.x}
+                  cy={node.y}
+                  r={visualRadius + 3}
+                  fill="none"
+                  stroke={fill}
+                  strokeWidth={1.2}
+                  opacity={0.5}
+                  style={{ pointerEvents: "none" }}
+                />
+              )}
               {isHovered && (
                 <text
                   x={node.x}
-                  y={node.y + radius + 14}
+                  y={node.y + visualRadius + 14}
                   textAnchor="middle"
                   fontSize={11}
                   fill="#111110"
@@ -240,7 +336,7 @@ export function GraphCanvas({ nodes, edges, onNodeClick, onNodeRightClick }: Pro
                 className="node-hit"
                 cx={node.x}
                 cy={node.y}
-                r={radius + 8}
+                r={visualRadius + 8}
                 fill="transparent"
                 style={{ cursor: "pointer" }}
                 onMouseEnter={() => setHoveredId(node.id)}
@@ -253,6 +349,47 @@ export function GraphCanvas({ nodes, edges, onNodeClick, onNodeRightClick }: Pro
                   onNodeRightClick?.(node.id, e.clientX, e.clientY);
                 }}
               />
+            </g>
+          );
+        })}
+
+        {projectedEntities.map((pe, i) => {
+          const angle = (i / Math.max(projectedEntities.length, 1)) * Math.PI * 2;
+          const r = 180 + (i % 3) * 40;
+          const x = Math.cos(angle) * r;
+          const y = Math.sin(angle) * r;
+          const fill = KIND_COLORS[pe.kind] ?? KIND_COLORS.default;
+
+          return (
+            <g key={pe.id} opacity={0.85}>
+              <circle
+                cx={x}
+                cy={y}
+                r={5}
+                fill={fill}
+              />
+              <circle
+                cx={x}
+                cy={y}
+                r={8}
+                fill="none"
+                stroke="#C9512D"
+                strokeWidth={1.2}
+                strokeDasharray="3 2"
+                opacity={0.7}
+                style={{ pointerEvents: "none" }}
+              />
+              <text
+                x={x}
+                y={y + 18}
+                textAnchor="middle"
+                fontSize={9}
+                fill="#6B675D"
+                fontFamily="Inter, sans-serif"
+                style={{ pointerEvents: "none" }}
+              >
+                {pe.name}
+              </text>
             </g>
           );
         })}

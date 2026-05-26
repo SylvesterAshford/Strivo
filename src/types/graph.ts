@@ -7,6 +7,7 @@ export interface GraphNode {
   positionY: number | null;
   connectionCount: number;
   hidden: boolean;
+  firstSeenAt: Date;
 }
 
 export interface GraphEdge {
@@ -15,4 +16,5 @@ export interface GraphEdge {
   toId: string;
   kind: "quiet" | "active" | "strong" | "tension";
   weight: number;
+  validFrom: Date;
 }

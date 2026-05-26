@@ -1,22 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockCreate } = vi.hoisted(() => ({ mockCreate: vi.fn() }));
+const { mockStructured } = vi.hoisted(() => ({ mockStructured: vi.fn() }));
 
-vi.mock("@anthropic-ai/sdk", () => ({
-  default: class MockAnthropic {
-    messages = { create: mockCreate };
-    constructor(_opts: unknown) {}
-  },
-}));
-
-vi.mock("@/lib/env", () => ({
-  env: { ANTHROPIC_API_KEY: "test-key" },
+vi.mock("@/lib/llm", () => ({
+  getLLM: () => ({ structured: mockStructured }),
 }));
 
 import { extractPassages } from "../llm-passages";
 
 beforeEach(() => {
-  mockCreate.mockReset();
+  mockStructured.mockReset();
 });
 
 describe("extractPassages", () => {
@@ -25,19 +18,8 @@ describe("extractPassages", () => {
     expect(result).toEqual([]);
   });
 
-  it("returns empty array when model returns malformed JSON", async () => {
-    mockCreate.mockResolvedValue({ content: [{ type: "text", text: "not json at all" }] });
-    const result = await extractPassages({
-      text: "Daylight Labs is great",
-      entities: [{ id: "e1", name: "Daylight Labs" }],
-    });
-    expect(result).toEqual([]);
-  });
-
-  it("returns empty array when model response has no JSON array", async () => {
-    mockCreate.mockResolvedValue({
-      content: [{ type: "text", text: '{"entityName":"Daylight","passage":"x","start":0,"end":1}' }],
-    });
+  it("returns empty array when structured throws", async () => {
+    mockStructured.mockRejectedValue(new Error("LLM error"));
     const result = await extractPassages({
       text: "Daylight Labs is great",
       entities: [{ id: "e1", name: "Daylight Labs" }],
@@ -46,14 +28,9 @@ describe("extractPassages", () => {
   });
 
   it("filters out entities not in the provided list", async () => {
-    mockCreate.mockResolvedValue({
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify([{ entityName: "Unknown Corp", passage: "...", start: 0, end: 3 }]),
-        },
-      ],
-    });
+    mockStructured.mockResolvedValue([
+      { entityName: "Unknown Corp", passage: "...", start: 0, end: 3 },
+    ]);
     const result = await extractPassages({
       text: "Daylight Labs is great",
       entities: [{ id: "e1", name: "Daylight Labs" }],
@@ -62,16 +39,9 @@ describe("extractPassages", () => {
   });
 
   it("maps entity names case-insensitively back to IDs", async () => {
-    mockCreate.mockResolvedValue({
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify([
-            { entityName: "daylight labs", passage: "Daylight Labs is great", start: 0, end: 22 },
-          ]),
-        },
-      ],
-    });
+    mockStructured.mockResolvedValue([
+      { entityName: "daylight labs", passage: "Daylight Labs is great", start: 0, end: 22 },
+    ]);
     const result = await extractPassages({
       text: "Daylight Labs is great",
       entities: [{ id: "e1", name: "Daylight Labs" }],

@@ -1,13 +1,10 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { env } from "@/lib/env";
 import { z } from "zod";
 import { createHash } from "node:crypto";
-
-const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+import { getLLM } from "@/lib/llm";
 
 const SummarySchema = z.object({
-  summary: z.string(),
-  strategicRead: z.string(),
+  summary: z.string().min(20).max(400),
+  strategicRead: z.string().min(50).max(800),
 });
 
 export async function generateEntitySummary(params: {
@@ -37,29 +34,18 @@ Materials that mention this entity:
 ${params.mentions.map((m) => `From "${m.materialTitle}": ${m.passage}`).join("\n\n")}
 
 Entities connected to this one:
-${params.connectedEntities.map((c) => `- ${c.name} (${c.relationship})`).join("\n")}
+${params.connectedEntities.map((c) => `- ${c.name} (${c.relationship})`).join("\n")}`;
 
-Return ONLY a JSON object with two fields:
-  "summary": A 2-3 sentence description of what this entity is and what it has done recently. Factual. No speculation.
-  "strategicRead": A 4-6 sentence analytical paragraph from the founder's perspective. What does this entity's presence and activity mean for the founder's business? What should they watch? Be direct, not hedging.
-
-No markdown. No code fences. Pure JSON.`;
-
-  const response = await client.messages.create({
-    model: "claude-sonnet-4-5",
-    max_tokens: 1024,
-    messages: [{ role: "user", content: prompt }],
+  const result = await getLLM().structured(prompt, {
+    schema: SummarySchema,
+    schemaDescription: `{
+  "summary": "2-3 sentence factual description of what this entity is and what it has done recently",
+  "strategicRead": "4-6 sentence analytical paragraph from the founder's perspective — what does this entity mean for the business, what should they watch"
+}`,
+    maxTokens: 800,
+    workKind: "reasoning",
+    retryOnInvalid: true,
   });
 
-  const textBlock = response.content.find((b) => b.type === "text");
-  if (!textBlock || textBlock.type !== "text") {
-    throw new Error("No text in LLM response");
-  }
-
-  const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("No JSON object found in response");
-
-  const parsed = SummarySchema.parse(JSON.parse(jsonMatch[0]));
-
-  return { ...parsed, inputHash };
+  return { summary: result.summary, strategicRead: result.strategicRead, inputHash };
 }

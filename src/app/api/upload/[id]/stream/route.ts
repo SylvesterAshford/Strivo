@@ -7,6 +7,7 @@ import { ensureGroup, ingestText, getEntities, getEdges, waitForExtraction, ZEP_
 import { createId } from "@/lib/id";
 import { log } from "@/lib/log";
 import { extractPassages } from "@/lib/extract/llm-passages";
+import { env } from "@/lib/env";
 
 export const maxDuration = 60;
 
@@ -191,6 +192,19 @@ export async function GET(
           workspaceId: ws.id,
           userId,
           meta: { materialId, entitiesAdded, entitiesUpdated, edgesAdded },
+        });
+
+        fetch(`${env.NEXT_PUBLIC_APP_URL}/api/branches/regenerate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workspaceId: ws.id }),
+        }).catch((err: unknown) => {
+          log({
+            level: "warn",
+            message: "branches.kickoff_failed",
+            workspaceId: ws.id,
+            meta: { error: err instanceof Error ? err.message : String(err) },
+          });
         });
       } catch (err: unknown) {
         const message = friendlyError(err);

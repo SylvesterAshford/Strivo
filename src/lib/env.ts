@@ -7,7 +7,7 @@ const envSchema = z.object({
   ZEP_API_KEY: z.string().min(1),
   ZEP_PROJECT_ID: z.string().min(1),
   BLOB_READ_WRITE_TOKEN: z.string().optional(),
-  ANTHROPIC_API_KEY: z.string().optional(),
+  GEMINI_API_KEY: z.string().min(1),
   NEXT_PUBLIC_APP_URL: z.string().url(),
 });
 
@@ -18,6 +18,6 @@ export const env = envSchema.parse({
   ZEP_API_KEY: process.env.ZEP_API_KEY,
   ZEP_PROJECT_ID: process.env.ZEP_PROJECT_ID,
   BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN,
-  ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY,
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
 });

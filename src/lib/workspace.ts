@@ -34,14 +34,18 @@ export async function getOrCreateWorkspace() {
 
   if (existing) return existing;
 
-  const newWorkspace = {
-    id: `ws_${createId()}`,
+  const newWorkspaceId = `ws_${createId()}`;
+  await db.insert(workspaces).values({
+    id: newWorkspaceId,
     ownerId: userId,
     name: "My workspace",
-  };
+  });
 
-  await db.insert(workspaces).values(newWorkspace);
-  return newWorkspace;
+  const created = await db.query.workspaces.findFirst({
+    where: eq(workspaces.id, newWorkspaceId),
+  });
+  if (!created) throw new Error("Failed to create workspace");
+  return created;
 }
 
 export async function requireWorkspace() {

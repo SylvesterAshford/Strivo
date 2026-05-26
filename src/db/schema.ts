@@ -32,6 +32,12 @@ export const workspaces = pgTable(
     businessDescription: text("business_description"),
     competitors: jsonb("competitors").$type<string[]>().default([]),
     segments: jsonb("segments").$type<string[]>().default([]),
+    branchesStatus: text("branches_status")
+      .$type<"idle" | "generating" | "complete" | "failed">()
+      .default("idle"),
+    branchesGeneratedAt: timestamp("branches_generated_at"),
+    branchesError: text("branches_error"),
+    graphStateHash: text("graph_state_hash"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
