@@ -1,16 +1,9 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-});
-
 export const metadata: Metadata = {
-  title: "Lattice",
-  description: "Strategic planning for founders.",
+  title: "Strivo API",
+  description: "Mobile backend for the Strivo Expo app.",
 };
 
 export default function RootLayout({
@@ -19,14 +12,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider
-      afterSignOutUrl="/sign-in"
-      signInFallbackRedirectUrl="/"
-      signUpFallbackRedirectUrl="/"
-    >
-      <html lang="en" className={`${inter.variable} h-full antialiased`}>
-        <body className="min-h-full">{children}</body>
-      </html>
-    </ClerkProvider>
+    <html lang="en" className="h-full antialiased">
+      <body className="min-h-full">{children}</body>
+    </html>
   );
 }

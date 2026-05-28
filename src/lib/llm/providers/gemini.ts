@@ -2,6 +2,7 @@ import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import type { LLMProvider, LLMTextOptions, LLMStructuredOptions } from "../types";
 import { LLMProviderError } from "../errors";
 import { log } from "@/lib/log";
+import { env } from "@/lib/env";
 
 // gemini-2.5-flash is current stable as of 2025; Flash handles everything
 const MODEL = "gemini-2.5-flash";
@@ -18,7 +19,13 @@ export class GeminiProvider implements LLMProvider {
   private client: GoogleGenAI;
 
   constructor(apiKey: string) {
-    this.client = new GoogleGenAI({ apiKey });
+    // When GEMINI_PROXY_URL is set, route every request through the Supabase
+    // Edge Function instead of hitting Google directly. Lets the backend run
+    // anywhere (including networks that can't reach generativelanguage.*).
+    this.client = new GoogleGenAI({
+      apiKey,
+      ...(env.GEMINI_PROXY_URL && { httpOptions: { baseUrl: env.GEMINI_PROXY_URL } }),
+    });
   }
 
   async text(prompt: string, options: LLMTextOptions = {}): Promise<string> {
@@ -82,12 +89,19 @@ export class GeminiProvider implements LLMProvider {
 
     let rawResult: unknown;
     try {
-      rawResult = await attempt();
+      // Retry transient upstream 5xx (e.g. "UNAVAILABLE high demand") up to 3
+      // times with exponential backoff before bubbling up.
+      rawResult = await withRetries(attempt, { tries: 3, baseMs: 800 });
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const retryable = isTransientUpstream(message);
       throw new LLMProviderError({
-        kind: "invalid_response",
+        kind: retryable ? "rate_limit" : "invalid_response",
         provider: this.name,
-        message: `Failed to parse JSON from Gemini: ${err instanceof Error ? err.message : String(err)}`,
+        message: retryable
+          ? "Gemini is overloaded right now. Try again in a moment."
+          : `Failed to parse JSON from Gemini: ${message}`,
+        retryable,
       });
     }
 
@@ -114,6 +128,32 @@ export class GeminiProvider implements LLMProvider {
 
     return validation.data;
   }
+}
+
+/** Match Google's "model overloaded" 5xx and 429 rate-limit error messages. */
+function isTransientUpstream(message: string): boolean {
+  return /\b(503|502|504|UNAVAILABLE|RESOURCE_EXHAUSTED|429|rate.?limit|overload|high demand)\b/i.test(message);
+}
+
+async function withRetries<T>(
+  fn: () => Promise<T>,
+  { tries, baseMs }: { tries: number; baseMs: number }
+): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!isTransientUpstream(msg)) throw err;
+      if (i < tries - 1) {
+        const delay = baseMs * Math.pow(2, i); // 800, 1600, 3200ms
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+  }
+  throw lastErr;
 }
 
 function translateGeminiError(err: unknown): LLMProviderError {

@@ -32,12 +32,39 @@ export const workspaces = pgTable(
     businessDescription: text("business_description"),
     competitors: jsonb("competitors").$type<string[]>().default([]),
     segments: jsonb("segments").$type<string[]>().default([]),
+    // Mobile MSME business profile (Strivo). Powers SWOT, market targeting,
+    // segmentation, and marketing recommendations in the Insights screen.
+    businessType: text("business_type"),
+    productService: text("product_service"),
+    location: text("location"),
+    monthlyTargetMmk: integer("monthly_target_mmk"),
+    biggestChallenge: text("biggest_challenge"),
+    budgetMmk: integer("budget_mmk"),
+    // Onboarding wizard (Strivo). Sales pattern + competitor intel feed SWOT
+    // and recommendations beyond the basic profile above.
+    posEnabled: boolean("pos_enabled"),
+    salesPeriods: jsonb("sales_periods").$type<("daily" | "weekly" | "monthly" | "yearly")[]>().default([]),
+    salesValues: jsonb("sales_values").$type<Partial<Record<"daily" | "weekly" | "monthly" | "yearly", number>>>().default({}),
+    monthlyExpensesMmk: integer("monthly_expenses_mmk"),
+    competitorDetails: jsonb("competitor_details").$type<{ name: string; tier: "discount" | "matcher" | "premium"; audience: string }[]>().default([]),
+    // Day-1 seeds so AI insights know the customer/product/supplier universe
+    // before the daily voice/manual stream starts producing facts.
+    customersSeed: jsonb("customers_seed").$type<string[]>().default([]),
+    productsSeed: jsonb("products_seed").$type<{ name: string; priceMmk?: number }[]>().default([]),
+    suppliersSeed: jsonb("suppliers_seed").$type<{ name: string; supplies?: string }[]>().default([]),
     branchesStatus: text("branches_status")
       .$type<"idle" | "generating" | "complete" | "failed">()
       .default("idle"),
     branchesGeneratedAt: timestamp("branches_generated_at"),
     branchesError: text("branches_error"),
     graphStateHash: text("graph_state_hash"),
+    // Strategic-insights cache. Recomputed in the background after every
+    // facts mutation; insights GET serves the cached blob for sub-second loads.
+    insightsJson: jsonb("insights_json"),
+    insightsGeneratedAt: timestamp("insights_generated_at"),
+    insightsStatus: text("insights_status")
+      .$type<"idle" | "generating">()
+      .default("idle"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -332,6 +359,53 @@ export const agentMessages = pgTable(
   })
 );
 
+// === VOICE RECORDINGS & FACTS (Phase 2 — mobile voice input) ===
+
+export const voiceRecordings = pgTable(
+  "voice_recordings",
+  {
+    id: text("id").primaryKey(), // `vrec_<cuid2>`
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    durationSecs: integer("duration_secs"),
+    transcript: text("transcript"),
+    transcribedAt: timestamp("transcribed_at"),
+    recordedAt: timestamp("recorded_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    workspaceIdx: index("voice_recording_workspace_idx").on(t.workspaceId),
+  })
+);
+
+export const facts = pgTable(
+  "facts",
+  {
+    id: text("id").primaryKey(), // `fact_<cuid2>`
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    recordingId: text("recording_id").references(() => voiceRecordings.id, {
+      onDelete: "set null",
+    }),
+    kind: text("kind")
+      .notNull()
+      .$type<"sale" | "expense" | "receivable" | "note">(),
+    amountMmk: integer("amount_mmk"),
+    description: text("description").notNull(),
+    counterparty: text("counterparty"),
+    occurredAt: timestamp("occurred_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    workspaceIdx: index("fact_workspace_idx").on(t.workspaceId),
+    workspaceDateIdx: index("fact_workspace_date_idx").on(
+      t.workspaceId,
+      t.occurredAt
+    ),
+  })
+);
+
 // === RELATIONS ===
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -345,6 +419,18 @@ export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
   edges: many(edges),
   branches: many(branches),
   simulations: many(simulations),
+  voiceRecordings: many(voiceRecordings),
+  facts: many(facts),
+}));
+
+export const voiceRecordingsRelations = relations(voiceRecordings, ({ one, many }) => ({
+  workspace: one(workspaces, { fields: [voiceRecordings.workspaceId], references: [workspaces.id] }),
+  facts: many(facts),
+}));
+
+export const factsRelations = relations(facts, ({ one }) => ({
+  workspace: one(workspaces, { fields: [facts.workspaceId], references: [workspaces.id] }),
+  recording: one(voiceRecordings, { fields: [facts.recordingId], references: [voiceRecordings.id] }),
 }));
 
 export const materialsRelations = relations(materials, ({ one, many }) => ({

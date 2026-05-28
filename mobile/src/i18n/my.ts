@@ -1,0 +1,290 @@
+// Burmese-primary copy. Per design.md 8.3, English only for mono eyebrows,
+// MMK, and day labels. All other UI copy lives here, never inline.
+
+export const my = {
+  common: {
+    save: "သိမ်းမည်",
+    saveAll: "အားလုံး သိမ်းမည်",
+    discard: "ဖျက်မည်",
+    cancel: "မလုပ်တော့ပါ",
+    edit: "ပြင်မည်",
+    next: "ရှေ့ဆက်မည်",
+    back: "နောက်သို့",
+    done: "ပြီးပါပြီ",
+    retry: "ထပ်ကြိုးစားမည်",
+    add: "ထည့်မည်",
+  },
+
+  greeting: {
+    // "မင်္ဂလာပါ {name}"
+    hello: (name: string) => `မင်္ဂလာပါ ${name}`,
+  },
+
+  coldStart: {
+    // "tell me what happened today"
+    heroPrompt: "ဒီနေ့ ဘယ်လို ဖြစ်ပျက်ခဲ့လဲ ပြောပါ",
+    // "tap the mic and tell me about today"
+    micHint: "မိုက်ခရိုဖုန်းကို နှိပ်ပြီး ဒီနေ့အကြောင်း ပြောပါ",
+  },
+
+  nav: {
+    home: "ပင်မ",
+    reports: "အစီရင်ခံစာ",
+    analytics: "ထိုးထွင်းသိမြင်",
+    profile: "ကိုယ်ရေး",
+  },
+
+  home: {
+    pinAnother: "နောက်ထပ် တစ်ခု ပင်ထိုးမည်",
+    needsAttention: "ဂရုစိုက်ရန်",
+    topThree: "ထိပ်တန်း သုံးခု",
+    recentActivity: "လတ်တလော လှုပ်ရှားမှု",
+    // Daily summary: "ဒီနေ့ {sales} ရောင်းရ"
+    todaySold: (sales: string) => `ဒီနေ့ ${sales} ရောင်းရပါပြီ`,
+    noSalesYet: "ဒီနေ့ ရောင်းအား မှတ်တမ်း မရှိသေးပါ",
+    deltaUp: (pct: number) => `မနေ့ထက် ${pct}% ပိုများသည်`,
+    deltaDown: (pct: number) => `မနေ့ထက် ${pct}% နည်းသည်`,
+    deltaSame: "မနေ့နှင့် အတူတူ",
+    // Alerts
+    alertOutstanding: (amount: string) => `${amount} ရရန် ကျန်နေသည်`,
+    alertExpenseHigh: "ဒီနေ့ ကုန်ကျ ရောင်းအားထက် များနေသည်",
+  },
+
+  importSales: {
+    title: "အရောင်းမှတ်တမ်း Excel သွင်းမည်",
+    subtitle: "Excel ဖိုင်ကို ရွေးပါ၊ ကော်လံတွေကို AI က အလိုလို တွေ့ပါမည်",
+    pickFile: "ဖိုင် ရွေးမည်",
+    analyzing: "ဖိုင်ကို ဆန်းစစ်နေသည်...",
+    mappingTitle: "ကော်လံ မှန်ကန်ပါသလား",
+    mappingSubtitle: "AI က ဤကော်လံများကို တွေ့ပါသည်။ မှားနေပါက ပြင်နိုင်ပါသည်",
+    roleDate: "ရက်စွဲ",
+    roleCustomer: "ဖောက်သည်",
+    roleAmount: "ပမာဏ (ကျပ်)",
+    roleProduct: "ပစ္စည်း",
+    roleQuantity: "အရေအတွက်",
+    roleNone: "မရှိပါ",
+    rowsDetected: (n: number) => `မှတ်တမ်း ${n} ခု တွေ့ပါသည်`,
+    confirmImport: "သွင်းမည်",
+    imported: (n: number) => `မှတ်တမ်း ${n} ခု သိမ်းပြီးပါပြီ`,
+  },
+
+  reports: {
+    title: "ဘဏ္ဍာရေး အစီရင်ခံစာ",
+    // "Log sales and expenses for 14 days to unlock financial reports"
+    emptyHeadline: "ဘဏ္ဍာရေး အစီရင်ခံစာ",
+    setTarget: "လစဉ် ပန်းတိုင် သတ်မှတ်မည်",
+    topCustomers: "ထိပ်တန်း ဖောက်သည်များ",
+    categoryBreakdown: "အမျိုးအစား ခွဲခြမ်းစိတ်ဖြာချက်",
+    kindSale: "အရောင်း",
+    kindExpense: "ကုန်ကျ",
+    kindReceivable: "ရရန်ကျန်",
+    kindNote: "မှတ်စု",
+    txCount: (n: number) => `${n} ကြိမ်`,
+  },
+
+  analytics: {
+    title: "ထိုးထွင်းသိမြင်",
+    emptyHeadline: "ထိုးထွင်းသိမြင်မှု",
+    analyzing: "သင့်လုပ်ငန်းကို ဆန်းစစ်နေသည်...",
+    growthScore: "ကြီးထွားမှု",
+    marketScore: "ဈေးကွက် အလားအလာ",
+    riskLevel: "အန္တရာယ်",
+    riskLow: "နည်း",
+    riskMedium: "အလယ်အလတ်",
+    riskHigh: "မြင့်",
+    revenueTrend: "ဝင်ငွေ လမ်းကြောင်း",
+    recommendations: "AI အကြံပြုချက်များ",
+    actionSteps: "လုပ်ဆောင်ရန်",
+    promotion: "ပရိုမိုးရှင်း",
+    stock: "ကုန်ပစ္စည်း စီမံ",
+    pricing: "စျေးနှုန်း",
+    growth: "ကြီးထွားရေး",
+    swot: "SWOT သုံးသပ်ချက်",
+    strengths: "အားသာချက်",
+    weaknesses: "အားနည်းချက်",
+    opportunities: "အခွင့်အလမ်း",
+    threats: "ခြိမ်းခြောက်မှု",
+    forecast: "၇ ရက် ခန့်မှန်းချက်",
+    segments: "ဖောက်သည် အုပ်စုများ",
+    segLoyal: "ပုံမှန်",
+    segOccasional: "ရံဖန်ရံခါ",
+    segOneTime: "တစ်ကြိမ်",
+    segWalkIn: "လမ်းသွားလမ်းလာ",
+    // Sub-page nav cards on overview
+    sectionTrend: "ဝင်ငွေနှင့် ခန့်မှန်းချက်",
+    sectionTrendPreview: "ရက် ၇ နှင့် ၇ ရက် ခန့်မှန်းချက်",
+    sectionSwotPreview: (s: number, w: number, o: number, t: number) =>
+      `အားသာ ${s} · အားနည်း ${w} · အခွင့်အလမ်း ${o} · ခြိမ်းခြောက် ${t}`,
+    sectionSegmentsPreview: (count: number) => `အုပ်စု ${count} ခု`,
+    sectionRecsPreview: "ပရိုမိုးရှင်း၊ ကုန်ပစ္စည်း၊ စျေးနှုန်း၊ ကြီးထွားရေး",
+    detailsTap: "အသေးစိတ် ကြည့်ရန် နှိပ်ပါ",
+    generateTitle: "AI ဆန်းစစ်ချက် ထုတ်မည်",
+    generateBody: "သင့်အရောင်း၊ ကုန်ကျ၊ ဖောက်သည် မှတ်တမ်းတွေအပေါ် မူတည်ပြီး ထိုးထွင်းသိမြင်မှု ထုတ်ပေးပါမည်",
+    generateCta: "ဆန်းစစ်မည်",
+    regenerateCta: "ပြန်ဆန်းစစ်မည်",
+  },
+
+  goals: {
+    title: "ပန်းတိုင်နှင့် ဘတ်ဂျက်",
+    myGoals: "ကျွန်ုပ်၏ ပန်းတိုင်များ",
+    addGoal: "ပန်းတိုင် ထည့်မည်",
+    budgeting: "ဘတ်ဂျက် စီမံခြင်း",
+    addBudget: "ဘတ်ဂျက် ထည့်မည်",
+  },
+
+  profile: {
+    title: "ကိုယ်ရေးအချက်အလက်",
+    businessProfile: "လုပ်ငန်း အချက်အလက်",
+    channels: "ချိတ်ဆက်မှု လမ်းကြောင်းများ",
+    customers: "ဖောက်သည်များ",
+    suppliers: "ပေးသွင်းသူများ",
+    signOut: "ထွက်မည်",
+  },
+
+  businessProfile: {
+    title: "လုပ်ငန်း အချက်အလက်",
+    subtitle: "ပိုမို တိကျသော အကြံပြုချက်များ ရရှိရန် ဖြည့်ပါ",
+    nameLabel: "လုပ်ငန်း နာမည်",
+    typeLabel: "လုပ်ငန်း အမျိုးအစား",
+    productLabel: "ရောင်းသော ပစ္စည်း / ဝန်ဆောင်မှု",
+    productPlaceholder: "ဥပမာ - မုန့်ဟင်းခါး၊ ကော်ဖီ",
+    locationLabel: "တည်နေရာ",
+    locationPlaceholder: "ဥပမာ - ရန်ကုန်၊ မြောက်ဥက္ကလာ",
+    targetLabel: "လစဉ် ရောင်းအား ပန်းတိုင် (ကျပ်)",
+    targetPlaceholder: "ဥပမာ - ၁၅၀၀၀၀၀",
+    challengeLabel: "အကြီးဆုံး စိန်ခေါ်မှု",
+    challengePlaceholder: "ဥပမာ - ဖောက်သည် နည်းခြင်း",
+    budgetLabel: "လစဉ် ဘတ်ဂျက် (ကျပ်)",
+    budgetPlaceholder: "ဥပမာ - ၂၀၀၀၀၀",
+    competitorsLabel: "ပြိုင်ဘက်များ (ကော်မာဖြင့် ခွဲပါ)",
+    competitorsPlaceholder: "ဥပမာ - ဆိုင် က၊ ဆိုင် ခ",
+    saved: "သိမ်းပြီးပါပြီ",
+  },
+
+  record: {
+    // "tell about today"
+    title: "ဒီနေ့အကြောင်း ပြောပါ",
+    typeInstead: "စာ ရိုက်ထည့်မည်",
+    listening: "နားထောင်နေသည်",
+  },
+
+  manualEntry: {
+    title: "မှတ်တမ်း ထည့်မည်",
+    kindLabel: "အမျိုးအစား",
+    descLabel: "ဖော်ပြချက်",
+    descPlaceholder: "ဘာဖြစ်ခဲ့သလဲ ဖော်ပြပါ",
+    amountLabel: "ပမာဏ (ကျပ်)",
+    amountPlaceholder: "ဥပမာ - ၅၀၀၀၀",
+    counterpartyLabel: "ဖောက်သည် / ပေးသွင်းသူ (ရွေးချယ်နိုင်သည်)",
+    counterpartyPlaceholder: "နာမည်",
+  },
+
+  auth: {
+    title: "ဝင်ရောက်မည်",
+    subtitle: "Gmail အကောင့်ဖြင့် ဝင်ရောက်ပါ",
+    continueWithGoogle: "Google ဖြင့် ဆက်လက်လုပ်ဆောင်မည်",
+    or: "သို့မဟုတ်",
+    emailLabel: "အီးမေးလ်",
+    emailPlaceholder: "you@example.com",
+    passwordLabel: "စကားဝှက်",
+    passwordPlaceholder: "••••••••",
+    signInWithEmail: "အီးမေးလ်ဖြင့် ဝင်ရောက်မည်",
+  },
+
+  onboarding: {
+    nameTitle: "သင့်လုပ်ငန်း နာမည်ကို ထည့်ပါ",
+    namePlaceholder: "လုပ်ငန်း နာမည်",
+    typeTitle: "ဘယ်လို လုပ်ငန်းမျိုးလဲ",
+    heroTitle: "ဘာကို အဓိက ကြည့်ချင်လဲ",
+    welcomeTitle: "ကြိုဆိုပါတယ်",
+    welcomeBody: "ဒီနေ့ ဘာရောင်းရလဲ၊ ဘယ်သူ မပေးရသေးလဲ ဆိုတာ ကျွန်ုပ်တို့ မှတ်ပေးပါမယ်",
+    // 7-step wizard
+    productTitle: "ဘာတွေ ရောင်းပါသလဲ",
+    productSubtitle: "သင်ရောင်းသော ပစ္စည်း / ဝန်ဆောင်မှု",
+    productPlaceholder: "ဥပမာ - မုန့်ဟင်းခါး၊ ကော်ဖီ၊ အဝတ်အထည်",
+    posTitle: "POS စနစ် သုံးပါသလား",
+    posSubtitle: "ဆော့ဖ်ဝဲဖြင့် အရောင်းမှတ်တမ်း ထားရှိခြင်း",
+    posYes: "သုံးပါသည်",
+    posNo: "မသုံးပါ",
+    periodsTitle: "အရောင်းမှတ်တမ်း ဘယ်လို မှတ်ပါသလဲ",
+    periodsSubtitle: "လုပ်ဖို့ စိတ်ဝင်စားသော ကာလများ ရွေးပါ",
+    periodDaily: "နေ့စဉ်",
+    periodWeekly: "အပတ်စဉ်",
+    periodMonthly: "လစဉ်",
+    periodYearly: "နှစ်စဉ်",
+    salesValuesTitle: "ပျမ်းမျှ ရောင်းအား ဘယ်လောက်ရှိပါသလဲ",
+    salesValuesSubtitle: "ရွေးထားသော ကာလအလိုက် ပျမ်းမျှ ပမာဏ (ကျပ်)",
+    expensesTitle: "လစဉ် အသုံးစရိတ်",
+    expensesSubtitle: "လစဉ် ဆိုင်ခ၊ လုပ်အား၊ ပစ္စည်းသွင်း စုစုပေါင်း",
+    expensesPlaceholder: "ဥပမာ - ၂၀၀၀၀၀",
+    competitorsTitle: "ပြိုင်ဘက်ဆိုင်များ",
+    competitorsSubtitle: "ပြိုင်ဘက်ဆိုင် နာမည်များ (ကော်မာဖြင့် ခွဲပါ)",
+    competitorsNone: "ပြိုင်ဘက် မရှိပါ",
+    rivalDetailsTitle: "ပြိုင်ဘက်အချက်အလက်",
+    rivalDetailsSubtitle: "ပြိုင်ဘက် တစ်ခုစီ၏ ဈေးနှုန်းပုံစံ၊ ပစ်မှတ်ဖောက်သည်",
+    tierDiscount: "ဈေးသက်သာ",
+    tierMatcher: "ဈေးတူ",
+    tierPremium: "ဈေးကြီး",
+    audiencePlaceholder: "ပစ်မှတ်ဖောက်သည် (ဥပမာ - ကျောင်းသား၊ မိသားစု)",
+    finishLabel: "ပြီးပါပြီ",
+    // Seed lists (steps 9-11)
+    customersTitle: "ပုံမှန် ဖောက်သည်များ",
+    customersSubtitle: "ပုံမှန် လာသော ဖောက်သည် နာမည် ၁၀-၃၀ (ကော်မာ/စာကြောင်းခွဲ)",
+    customersPlaceholder: "ဥပမာ\nကိုအောင်\nမမေ\nဒေါ်အေး",
+    productsTitle: "အရောင်းရဆုံး ပစ္စည်းများ",
+    productsSubtitle: "အရောင်းရဆုံး ပစ္စည်း ၅-၁၀ ခု၊ စျေးနှုန်းပါ ထည့်နိုင်ပါသည် (နာမည် : စျေး)",
+    productsPlaceholder: "မုန့်ဟင်းခါး : ၂၀၀၀\nကော်ဖီ : ၁၅၀၀\nကိတ်မုန့်",
+    suppliersTitle: "ပုံမှန် ပေးသွင်းသူများ",
+    suppliersSubtitle: "ပေးသွင်းသူ နာမည် + သွင်းသော ပစ္စည်း (နာမည် : ပစ္စည်း)",
+    suppliersPlaceholder: "ဦးကြီး : ဆန်\nရွှေပြည် : ဆီ\nညီအစ်ကို",
+    skipLabel: "ကျော်မည်",
+    // Step 11 — bulk Excel import
+    bulkTitle: "အရောင်းမှတ်တမ်း သွင်းမည် (ရွေးချယ်နိုင်)",
+    bulkSubtitle: "Excel (.xlsx) ဖိုင်ရှိရင် တင်ပါ၊ နောက်မှ Profile ကနေ တင်လည်း ရပါသည်",
+    bulkPick: "Excel ဖိုင် ရွေးမည်",
+    bulkAnalyzing: "ဖိုင်ကို ဆန်းစစ်နေသည်...",
+    bulkConfirmTitle: "ကော်လံ မှန်ပါသလား",
+    bulkRows: (n: number) => `မှတ်တမ်း ${n} ခု`,
+    bulkImporting: "သွင်းနေသည်...",
+    bulkSaving: "သိမ်းနေသည်...",
+    bulkSkipFinish: "မပါဘဲ ဆက်လုပ်မည်",
+    bulkImportAndFinish: "သွင်းပြီး ဆက်လုပ်မည်",
+    // Plain-text paste mode
+    bulkPasteCta: "စာ ရိုက်/ကူးထည့်မည်",
+    bulkPasteTitle: "သင့်အရောင်းမှတ်တမ်းကို ကူးထည့်ပါ",
+    bulkPasteSubtitle: "ဥပမာ - Viber/Telegram မှ စာ၊ ကိုယ်တိုင်ရိုက်ထားသော မှတ်တမ်း",
+    bulkPastePlaceholder: "ဥပမာ -\nဒီနေ့ မုန့်ဟင်းခါး ၂ပွဲ ၆၀၀၀ ကိုအောင်\nဆန် ၁ အိတ် ၁၅၀၀၀\nကိုကျော် ၁၂၀၀၀ မပေးရသေး",
+    // Nudge banner on Home if profile incomplete.
+    nudgeIncomplete: "ပိုမို တိကျသော အကြံပြုချက်ရရှိရန် လုပ်ငန်း အချက်အလက်ဖြည့်ပါ",
+    nudgeCta: "ဖြည့်မည်",
+  },
+
+  businessType: {
+    retail: "လက်လီ ရောင်းဝယ်ရေး",
+    fnb: "စားသောက်ဆိုင်",
+    services: "ဝန်ဆောင်မှု",
+    b2bTrading: "လက်ကား ကုန်သွယ်ရေး",
+    other: "အခြား",
+  },
+
+  heroMetric: {
+    todaySales: "ဒီနေ့ ရောင်းအား",
+    weekSales: "ဒီအပတ် ရောင်းအား",
+    monthRevenue: "ဒီလ ဝင်ငွေ",
+    outstanding: "ရရန် ကျန်ငွေ",
+  },
+} as const;
+
+// English mono eyebrows (design.md 8.3) — uppercased at render.
+export const eyebrows = {
+  today: "TODAY",
+  week: "WEEK",
+  month: "MONTH",
+  revenue: "REVENUE",
+  budget: "BUDGET",
+  needsAttention: "NEEDS ATTENTION",
+  outstanding: "OUTSTANDING",
+  topCustomer: "TOP CUSTOMER",
+} as const;
+
+export const dayLabels = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
