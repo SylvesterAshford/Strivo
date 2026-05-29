@@ -17,7 +17,7 @@ export default function AnalyticsOverview() {
   // Don't auto-fire AI analysis on tab open — wait for the user to tap.
   const [triggered, setTriggered] = useState(false);
 
-  const { data, isLoading, refetch, isFetching } = useQuery({
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: ["insights"],
     queryFn: fetchInsights,
     staleTime: 5 * 60_000,
@@ -101,7 +101,11 @@ export default function AnalyticsOverview() {
     <Screen>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.lg }}>
         <AppText variant="subhead">{my.analytics.title}</AppText>
-        <Button label={my.analytics.regenerateCta} variant="secondary" onPress={() => refetch()} />
+        <Button
+          label={my.scenarios.title}
+          variant="secondary"
+          onPress={() => router.push("/analytics/scenarios")}
+        />
       </View>
 
       <View style={{ gap: spacing.lg }}>

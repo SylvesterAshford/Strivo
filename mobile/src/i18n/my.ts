@@ -50,6 +50,22 @@ export const my = {
     alertExpenseHigh: "ဒီနေ့ ကုန်ကျ ရောင်းအားထက် များနေသည်",
   },
 
+  importProducts: {
+    title: "ပစ္စည်းစာရင်း သွင်းမည်",
+    subtitle: "Excel၊ PDF၊ သို့မဟုတ် စာ ကူးထည့်ပါ — AI က ပစ္စည်းနာမည် နှင့် စျေးနှုန်းတွေ ဖော်ထုတ်ပါမည်",
+    pickExcel: "Excel ဖိုင် ရွေးမည်",
+    pickPdf: "PDF ဖိုင် ရွေးမည်",
+    pasteText: "စာ ရိုက်/ကူးထည့်မည်",
+    pasteTitle: "ပစ္စည်းစာရင်းကို ကူးထည့်ပါ",
+    pastePlaceholder: "မုန့်ဟင်းခါး : ၂၀၀၀\nကော်ဖီ : ၁၅၀၀\nကိတ်မုန့်",
+    analyzing: "ဖိုင်ကို ဆန်းစစ်နေသည်...",
+    reviewTitle: "တွေ့ရှိသော ပစ္စည်းများ",
+    reviewSubtitle: "မှားနေသော ပစ္စည်းကို ဖျက်နိုင်ပါသည်",
+    save: "သိမ်းမည်",
+    saved: (n: number) => `ပစ္စည်း ${n} ခု သိမ်းပြီးပါပြီ`,
+    none: "ပစ္စည်း မတွေ့ပါ",
+  },
+
   importSales: {
     title: "အရောင်းမှတ်တမ်း Excel သွင်းမည်",
     subtitle: "Excel ဖိုင်ကို ရွေးပါ၊ ကော်လံတွေကို AI က အလိုလို တွေ့ပါမည်",
@@ -80,6 +96,34 @@ export const my = {
     kindReceivable: "ရရန်ကျန်",
     kindNote: "မှတ်စု",
     txCount: (n: number) => `${n} ကြိမ်`,
+  },
+
+  scenarios: {
+    title: "ဆုံးဖြတ်ချက် စမ်းကြည့်မည်",
+    subtitle: "သင်လုပ်ရန် စဉ်းစားနေသော ပြောင်းလဲမှုကို ရွေးပါ၊ AI က အကျိုးသက်ရောက်မှု ခန့်မှန်းပေးပါမည်",
+    templatesLabel: "မေးခွန်းနမူနာများ",
+    customLabel: "ကိုယ်တိုင် ရိုက်ထည့်ပါ",
+    customPlaceholder: "ဥပမာ - ဈေးနှုန်း ၁၀% လျှော့လိုက်ရင် ဘယ်လို ဖြစ်မလဲ",
+    runCta: "ဆန်းစစ်မည်",
+    resetCta: "ထပ်စမ်းကြည့်မည်",
+    impactSales: "ရောင်းအား",
+    impactMargin: "အမြတ်",
+    impactRisk: "အန္တရာယ်",
+    watchFor: "ဂရုစိုက်ရန်",
+    steps: "လုပ်ဆောင်ရန်",
+    caveats: "သတိပြုရန်",
+    emptyHeadline: "AI ဆန်းစစ်ချက် မထုတ်ရသေးပါ",
+    emptyBody: "ဆုံးဖြတ်ချက် မစမ်းမီ Analytics tab တွင် ဦးစွာ ဆန်းစစ်ပါ",
+    emptyCta: "Analytics သို့ သွားမည်",
+    templates: {
+      lowerPrice: "ဈေးနှုန်း ၁၀% လျှော့မယ်",
+      raisePrice: "ဈေးနှုန်း ၁၀% တိုးမယ်",
+      promotion: "ပရိုမိုးရှင်း လုပ်မယ်",
+      cutExpense: "အကြီးဆုံး ကုန်ကျ ဖြတ်တောက်မယ်",
+      hireStaff: "ဝန်ထမ်း တစ်ဦး တိုးခေါ်မယ်",
+      addProduct: "ပစ္စည်းသစ် ထည့်ရောင်းမယ်",
+      openLocation: "တခြား နေရာတွင် ဆိုင်ထပ်ဖွင့်မယ်",
+    },
   },
 
   analytics: {

@@ -26,13 +26,18 @@ function incomplete(p: BusinessProfile): boolean {
 
 export function ProfileNudge() {
   const router = useRouter();
-  const { data: profile } = useQuery({
+  const { data: profile, isLoading } = useQuery({
     queryKey: ["profile"],
     queryFn: fetchProfile,
     staleTime: 5 * 60_000,
   });
 
-  if (!profile || !incomplete(profile)) return null;
+  // Three states:
+  // 1. Still loading first fetch → don't render yet.
+  // 2. Backend returned a *complete* profile → hide the nudge.
+  // 3. Anything else (incomplete profile OR fetch returned null) → show.
+  if (isLoading) return null;
+  if (profile && !incomplete(profile)) return null;
 
   return (
     <Pressable

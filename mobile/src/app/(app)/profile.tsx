@@ -46,6 +46,7 @@ export default function ProfileScreen() {
       <Eyebrow style={{ marginBottom: spacing.md }}>DATA</Eyebrow>
       <Surface radius="goalCard" style={{ padding: spacing["2xl"], marginBottom: spacing["4xl"], gap: spacing.lg }}>
         <Row label={my.importSales.title} onPress={() => router.push("/import-sales")} />
+        <Row label={my.importProducts.title} onPress={() => router.push("/import-products")} />
       </Surface>
 
       <Button label={my.profile.signOut} variant="secondary" onPress={signOut} />

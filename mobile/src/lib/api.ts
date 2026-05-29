@@ -3,18 +3,39 @@ import { env } from "@/lib/env";
 
 // Authed fetch against the Next.js backend. Attaches the current Supabase JWT
 // as a bearer token; the backend validates it via the mobile auth bridge.
-async function authedFetch(path: string, init: RequestInit = {}): Promise<Response> {
+// `timeoutMs` defaults to 30s for normal queries; LLM-bound endpoints pass a
+// higher value so Gemini has time to think.
+async function authedFetch(
+  path: string,
+  init: RequestInit = {},
+  timeoutMs = 30_000
+): Promise<Response> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   const headers = new Headers(init.headers);
   if (token) headers.set("authorization", `Bearer ${token}`);
-  return fetch(`${env.apiBaseUrl}${path}`, { ...init, headers });
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(`${env.apiBaseUrl}${path}`, {
+      ...init,
+      headers,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
-async function authedJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function authedJson<T>(
+  path: string,
+  init: RequestInit = {},
+  timeoutMs = 30_000
+): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("content-type", "application/json");
-  const res = await authedFetch(path, { ...init, headers });
+  const res = await authedFetch(path, { ...init, headers }, timeoutMs);
   if (!res.ok) {
     // Pull the JSON error body so Zod validation failures surface in the UI.
     const detail = await res.text().catch(() => "");
@@ -204,11 +225,20 @@ export async function uploadVoice(
   const headers = new Headers();
   if (token) headers.set("authorization", `Bearer ${token}`);
 
-  const res = await fetch(`${env.apiBaseUrl}/api/mobile/v1/voice/upload`, {
-    method: "POST",
-    headers,
-    body: form,
-  });
+  const controller = new AbortController();
+  // Voice upload + transcription + Gemini extraction — generous timeout.
+  const timer = setTimeout(() => controller.abort(), 120_000);
+  let res: Response;
+  try {
+    res = await fetch(`${env.apiBaseUrl}/api/mobile/v1/voice/upload`, {
+      method: "POST",
+      headers,
+      body: form,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as { error?: string };
@@ -311,11 +341,20 @@ export async function importSalesPreview(
   const headers = new Headers();
   if (token) headers.set("authorization", `Bearer ${token}`);
 
-  const res = await fetch(`${env.apiBaseUrl}/api/mobile/v1/sales/import/preview`, {
-    method: "POST",
-    headers,
-    body: form,
-  });
+  const controller = new AbortController();
+  // XLSX parse + Gemini column detection — generous timeout.
+  const timer = setTimeout(() => controller.abort(), 120_000);
+  let res: Response;
+  try {
+    res = await fetch(`${env.apiBaseUrl}/api/mobile/v1/sales/import/preview`, {
+      method: "POST",
+      headers,
+      body: form,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(err.error ?? `Preview failed (${res.status})`);
@@ -335,12 +374,62 @@ export async function importSalesConfirm(
   });
 }
 
+/** Extract a product catalogue from an Excel or PDF file. Returns the list — caller saves. */
+export async function importProductsFile(
+  fileUri: string,
+  fileName: string,
+  mimeType: string
+): Promise<{ products: ProductSeed[] }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+
+  const form = new FormData();
+  form.append("file", { uri: fileUri, type: mimeType, name: fileName } as unknown as Blob);
+
+  const headers = new Headers();
+  if (token) headers.set("authorization", `Bearer ${token}`);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 240_000);
+  let res: Response;
+  try {
+    res = await fetch(`${env.apiBaseUrl}/api/mobile/v1/products/import/file`, {
+      method: "POST",
+      headers,
+      body: form,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(err.error ?? `Import failed (${res.status})`);
+  }
+  return res.json() as Promise<{ products: ProductSeed[] }>;
+}
+
+/** Extract a product catalogue from a pasted text block. */
+export async function importProductsText(text: string): Promise<{ products: ProductSeed[] }> {
+  return authedJson<{ products: ProductSeed[] }>(
+    "/api/mobile/v1/products/import/text",
+    { method: "POST", body: JSON.stringify({ text }) },
+    240_000
+  );
+}
+
 /** Paste a free-text ledger / message. LLM extracts facts, server bulk-inserts. */
 export async function importSalesText(text: string): Promise<{ inserted: number; error?: string }> {
-  return authedJson<{ inserted: number; error?: string }>("/api/mobile/v1/sales/import/text", {
-    method: "POST",
-    body: JSON.stringify({ text }),
-  });
+  return authedJson<{ inserted: number; error?: string }>(
+    "/api/mobile/v1/sales/import/text",
+    {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    },
+    // Burmese fact extraction + 3 Gemini retries with backoff can take a
+    // while; budget plenty of headroom so we aren't aborting mid-extraction.
+    240_000
+  );
 }
 
 // ── Strategic insights (AI) ─────────────────────────────────────────────────
@@ -402,10 +491,39 @@ export type InsightsResponse =
       regenerating: boolean;
     };
 
+// ── Scenarios (AI what-if) ──────────────────────────────────────────────────
+
+export interface ScenarioResult {
+  headline: string;
+  estimatedImpact: {
+    salesPct: number;
+    marginPct: number;
+    risk: "low" | "medium" | "high";
+  };
+  watchFor: string[];
+  steps: string[];
+  caveats: string[];
+}
+
+export type ScenarioResponse =
+  | { ready: false }
+  | { ready: true; result: ScenarioResult };
+
+/** Run a what-if scenario against the cached insights report. */
+export async function runInsightScenario(scenario: string): Promise<ScenarioResponse> {
+  return authedJson<ScenarioResponse>(
+    "/api/mobile/v1/insights/scenario",
+    { method: "POST", body: JSON.stringify({ scenario }) },
+    // Burmese reasoning + retries — be generous.
+    180_000
+  );
+}
+
 export async function fetchInsights(): Promise<InsightsResponse | null> {
   if (!env.apiBaseUrl) return null;
   try {
-    return await authedJson<InsightsResponse>("/api/mobile/v1/insights");
+    // Cold-start insights generation can take 20-40s on Burmese with Gemini retries.
+    return await authedJson<InsightsResponse>("/api/mobile/v1/insights", {}, 120_000);
   } catch {
     return null;
   }

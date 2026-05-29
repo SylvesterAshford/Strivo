@@ -8,7 +8,10 @@ import { extractFacts } from "@/lib/extraction/mobile-facts";
 import { triggerInsightsRegen } from "@/lib/insights/cache";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// Burmese fact extraction can be slow when Gemini is overloaded (3 retries
+// with backoff). Give the route plenty of headroom so it isn't killed
+// before the LLM finishes thinking.
+export const maxDuration = 300;
 
 const Body = z.object({
   text: z.string().min(10).max(10_000),

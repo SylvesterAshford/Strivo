@@ -8,14 +8,18 @@ import { SubHeader } from "@/components/layout/SubHeader";
 import { AppText } from "@/components/ui/AppText";
 import { Button } from "@/components/ui/Button";
 import { Eyebrow } from "@/components/ui/Eyebrow";
+import { TextField } from "@/components/ui/TextField";
 import {
   importSalesPreview,
   importSalesConfirm,
+  importSalesText,
   type ImportPreviewResponse,
   type ColumnMapping,
 } from "@/lib/api";
 import { colors, spacing, radius } from "@/theme/tokens";
 import { my } from "@/i18n/my";
+
+type Mode = "initial" | "excel" | "paste";
 
 type RoleKey = keyof ColumnMapping;
 const ROLES: { key: RoleKey; label: string }[] = [
@@ -29,13 +33,22 @@ const ROLES: { key: RoleKey; label: string }[] = [
 export default function ImportSalesScreen() {
   const router = useRouter();
   const qc = useQueryClient();
+  const [mode, setMode] = useState<Mode>("initial");
   const [preview, setPreview] = useState<ImportPreviewResponse | null>(null);
   const [mapping, setMapping] = useState<ColumnMapping | null>(null);
+  const [pasteText, setPasteText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imported, setImported] = useState<number | null>(null);
 
-  const onPick = async () => {
+  const invalidateAll = () => {
+    qc.invalidateQueries({ queryKey: ["home"] });
+    qc.invalidateQueries({ queryKey: ["reports"] });
+    qc.invalidateQueries({ queryKey: ["analytics"] });
+    qc.invalidateQueries({ queryKey: ["insights"] });
+  };
+
+  const onPickFile = async () => {
     setError(null);
     const res = await DocumentPicker.getDocumentAsync({
       type: [
@@ -45,7 +58,6 @@ export default function ImportSalesScreen() {
       copyToCacheDirectory: true,
     });
     if (res.canceled || !res.assets?.[0]) return;
-
     const asset = res.assets[0];
     setBusy(true);
     try {
@@ -56,6 +68,7 @@ export default function ImportSalesScreen() {
       );
       setPreview(data);
       setMapping(data.mapping);
+      setMode("excel");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Preview failed");
     } finally {
@@ -63,18 +76,14 @@ export default function ImportSalesScreen() {
     }
   };
 
-  const onConfirm = async () => {
+  const onConfirmExcel = async () => {
     if (!preview || !mapping) return;
     setBusy(true);
     setError(null);
     try {
       const r = await importSalesConfirm(preview.headers, preview.rows, mapping);
       setImported(r.inserted);
-      // Reshape all downstream views.
-      qc.invalidateQueries({ queryKey: ["home"] });
-      qc.invalidateQueries({ queryKey: ["reports"] });
-      qc.invalidateQueries({ queryKey: ["analytics"] });
-      qc.invalidateQueries({ queryKey: ["insights"] });
+      invalidateAll();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Import failed");
     } finally {
@@ -82,7 +91,22 @@ export default function ImportSalesScreen() {
     }
   };
 
-  // Success state — show confirmation, link back to Home.
+  const onConfirmPaste = async () => {
+    if (pasteText.trim().length < 10) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await importSalesText(pasteText.trim());
+      setImported(r.inserted);
+      invalidateAll();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Extraction failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ── Success ───────────────────────────────────────────────────────────
   if (imported !== null) {
     return (
       <Screen>
@@ -95,8 +119,8 @@ export default function ImportSalesScreen() {
     );
   }
 
-  // Preview/mapping state — file picked, show columns + role chips.
-  if (preview && mapping) {
+  // ── Excel preview / mapping ──────────────────────────────────────────
+  if (mode === "excel" && preview && mapping) {
     return (
       <Screen>
         <SubHeader title={my.importSales.mappingTitle} />
@@ -137,23 +161,88 @@ export default function ImportSalesScreen() {
         <View style={{ marginTop: spacing["2xl"], gap: spacing.md }}>
           <Button
             label={busy ? "..." : my.importSales.confirmImport}
-            onPress={onConfirm}
+            onPress={onConfirmExcel}
             disabled={busy || mapping.amount < 0}
           />
-          <Button label={my.common.cancel} variant="secondary" onPress={() => { setPreview(null); setMapping(null); }} />
+          <Button
+            label={my.common.cancel}
+            variant="secondary"
+            onPress={() => {
+              setPreview(null);
+              setMapping(null);
+              setMode("initial");
+            }}
+          />
         </View>
       </Screen>
     );
   }
 
-  // Initial state — show pick button.
+  // ── Text paste ───────────────────────────────────────────────────────
+  if (mode === "paste") {
+    return (
+      <Screen>
+        <SubHeader title={my.onboarding.bulkPasteTitle} />
+        <AppText variant="body" color="secondary" style={{ marginBottom: spacing.lg }}>
+          {my.onboarding.bulkPasteSubtitle}
+        </AppText>
+
+        <TextField
+          value={pasteText}
+          onChangeText={setPasteText}
+          placeholder={my.onboarding.bulkPastePlaceholder}
+          multiline
+          numberOfLines={10}
+          autoFocus
+          style={{ minHeight: 200, textAlignVertical: "top" }}
+        />
+
+        {error ? (
+          <AppText variant="caption" style={{ color: colors.semantic.critical, marginTop: spacing.md }}>
+            {error}
+          </AppText>
+        ) : null}
+
+        <View style={{ marginTop: spacing["2xl"], gap: spacing.md }}>
+          <Button
+            label={busy ? my.onboarding.bulkImporting : my.onboarding.bulkImportAndFinish}
+            onPress={onConfirmPaste}
+            disabled={busy || pasteText.trim().length < 10}
+          />
+          <Button
+            label={my.common.cancel}
+            variant="secondary"
+            onPress={() => {
+              setPasteText("");
+              setMode("initial");
+            }}
+          />
+        </View>
+      </Screen>
+    );
+  }
+
+  // ── Initial ─────────────────────────────────────────────────────────
   return (
     <Screen>
       <SubHeader title={my.importSales.title} />
       <AppText variant="body" color="secondary" style={{ marginBottom: spacing["2xl"] }}>
         {my.importSales.subtitle}
       </AppText>
-      <Button label={busy ? my.importSales.analyzing : my.importSales.pickFile} onPress={onPick} disabled={busy} />
+
+      <View style={{ gap: spacing.md }}>
+        <Button
+          label={busy ? my.importSales.analyzing : my.importSales.pickFile}
+          onPress={onPickFile}
+          disabled={busy}
+        />
+        <Button
+          label={my.onboarding.bulkPasteCta}
+          variant="secondary"
+          onPress={() => setMode("paste")}
+        />
+      </View>
+
       {busy ? <ActivityIndicator color={colors.accent.base} style={{ marginTop: spacing.lg }} /> : null}
       {error ? (
         <AppText variant="caption" style={{ color: colors.semantic.critical, marginTop: spacing.md }}>

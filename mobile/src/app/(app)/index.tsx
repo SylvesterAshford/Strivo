@@ -1,4 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useFocusEffect } from "expo-router";
 import { Screen } from "@/components/layout/Screen";
 import { HomeHeader } from "@/components/home/HomeHeader";
 import { ColdStartHero } from "@/components/home/ColdStartHero";
@@ -28,6 +30,7 @@ function heroAmount(metric: HeroMetricKey, home: HomeData): number {
 export default function HomeScreen() {
   const ownerName = useProfile((s) => s.ownerName || s.businessName || "");
   const heroMetric = useProfile((s) => s.heroMetric);
+  const qc = useQueryClient();
 
   const { data: home } = useQuery({
     queryKey: ["home"],
@@ -35,6 +38,16 @@ export default function HomeScreen() {
     staleTime: 30_000,
     refetchOnWindowFocus: true,
   });
+
+  // Tabs stay mounted in expo-router, so React Query never sees a remount
+  // when the user navigates back. Refetch on every tab focus so freshly
+  // imported facts show up the moment Home is opened.
+  useFocusEffect(
+    useCallback(() => {
+      qc.invalidateQueries({ queryKey: ["home"] });
+      qc.invalidateQueries({ queryKey: ["profile"] });
+    }, [qc])
+  );
 
   const hasFacts =
     (home?.todaySalesMmk ?? 0) > 0 ||

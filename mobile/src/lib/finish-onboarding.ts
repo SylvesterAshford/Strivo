@@ -15,16 +15,14 @@ interface ProfileStoreSetters {
   completeOnboarding: () => void;
 }
 
-// Flush the wizard draft to the backend and flip the onboarded flag.
-// Throws on save failure so the caller can surface the message.
-export async function finishOnboarding(draft: OnboardingDraft, profile: ProfileStoreSetters): Promise<void> {
-  // Mirror the draft into the local profile store so Home/Header pick it up.
-  profile.setBusinessName(draft.businessName);
-  if (draft.businessType) profile.setBusinessType(draft.businessType as import("@/stores/profile").BusinessType);
-  profile.setHeroMetric(defaultHero(draft.businessType));
+interface FinishOptions {
+  // When true, await the backend save before resolving. Default false —
+  // optimistic completion so a slow backend can't trap the user on the wizard.
+  awaitSave?: boolean;
+}
 
-  // Only send fields with meaningful values — Zod rejects empty `businessName`
-  // and we don't want a half-filled draft to fail the whole save.
+/** Build the conditional PUT body from a draft. */
+function buildBody(draft: OnboardingDraft): Partial<Parameters<typeof saveProfile>[0]> {
   const body: Partial<Parameters<typeof saveProfile>[0]> = {};
   if (draft.businessName.trim()) body.businessName = draft.businessName.trim();
   if (draft.businessType) body.businessType = draft.businessType;
@@ -41,7 +39,41 @@ export async function finishOnboarding(draft: OnboardingDraft, profile: ProfileS
   if (draft.customersSeed.length) body.customersSeed = draft.customersSeed;
   if (draft.productsSeed.length) body.productsSeed = draft.productsSeed;
   if (draft.suppliersSeed.length) body.suppliersSeed = draft.suppliersSeed;
+  return body;
+}
 
-  await saveProfile(body);
+/**
+ * Finish onboarding. Mirrors the draft into the local profile store, then
+ * either awaits the backend save (when `awaitSave: true`) or fires it in the
+ * background (default). Always flips the `onboarded` flag so the router
+ * advances to the app.
+ */
+export async function finishOnboarding(
+  draft: OnboardingDraft,
+  profile: ProfileStoreSetters,
+  options: FinishOptions = {}
+): Promise<void> {
+  // Mirror the draft into the local profile store so Home/Header pick it up.
+  profile.setBusinessName(draft.businessName);
+  if (draft.businessType) {
+    profile.setBusinessType(draft.businessType as import("@/stores/profile").BusinessType);
+  }
+  profile.setHeroMetric(defaultHero(draft.businessType));
+
+  const body = buildBody(draft);
+  const savePromise = saveProfile(body);
+
+  if (options.awaitSave) {
+    await savePromise;
+    profile.completeOnboarding();
+    return;
+  }
+
+  // Optimistic: flip onboarded immediately so the wizard unmounts and the
+  // user lands on Home. The save still runs; failures are logged only so the
+  // user is never stuck on a spinner because of network or backend latency.
   profile.completeOnboarding();
+  savePromise.catch((err) => {
+    console.warn("[onboarding] background profile save failed:", err);
+  });
 }
