@@ -59,8 +59,8 @@ export default function RivalDetailsStep() {
 
   return (
     <WizardStep
-      step={7}
-      totalSteps={11}
+      step={6}
+      totalSteps={10}
       title={my.onboarding.rivalDetailsTitle}
       subtitle={my.onboarding.rivalDetailsSubtitle}
       ctaLabel={my.common.next}

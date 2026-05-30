@@ -1,8 +1,10 @@
-import { View, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
+import { View, KeyboardAvoidingView, Platform, ScrollView, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppText } from "@/components/ui/AppText";
 import { Button } from "@/components/ui/Button";
-import { colors, spacing, radius } from "@/theme/tokens";
+import { useAuth } from "@/contexts/AuthContext";
+import { colors, spacing } from "@/theme/tokens";
+import { my } from "@/i18n/my";
 
 // Wizard layout: progress bar at top, title block, body, primary CTA pinned
 // at the bottom above the keyboard. Used by every onboarding wizard step so
@@ -31,6 +33,7 @@ export function WizardStep({
   onSecondary?: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const { signOut } = useAuth();
   const pct = (step / totalSteps) * 100;
 
   return (
@@ -46,6 +49,14 @@ export function WizardStep({
           paddingHorizontal: spacing.sectionX,
         }}
       >
+        <View style={{ flexDirection: "row", justifyContent: "flex-end", marginBottom: spacing.md }}>
+          <Pressable onPress={() => void signOut()} hitSlop={8}>
+            <AppText variant="caption" color="secondary">
+              {my.onboarding.exit}
+            </AppText>
+          </Pressable>
+        </View>
+
         <View style={{ gap: spacing.sm, marginBottom: spacing["3xl"] }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
             <AppText variant="caption" color="tertiary">

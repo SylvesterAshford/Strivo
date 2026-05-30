@@ -16,8 +16,31 @@ import { Eyebrow } from "@/components/ui/Eyebrow";
 import { Icon } from "@/components/ui/Icon";
 import { colors, spacing, radius } from "@/theme/tokens";
 import { my } from "@/i18n/my";
-import { fetchProfile, saveProfile, type BusinessProfile } from "@/lib/api";
+import {
+  fetchProfile,
+  saveProfile,
+  type BusinessProfile,
+  type ProductSeed,
+  type SupplierSeed,
+  type ExpenseSeed,
+} from "@/lib/api";
+import { useProfile, type BusinessType } from "@/stores/profile";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+// Coerce the backend's free-form businessType string into the local enum so
+// the Home greeting / hero metric pick up edits immediately.
+function toBusinessType(raw: string | null): BusinessType | null {
+  switch (raw) {
+    case "retail":
+    case "fnb":
+    case "services":
+    case "b2b_trading":
+    case "other":
+      return raw;
+    default:
+      return raw ? "other" : null;
+  }
+}
 
 const TYPES: { value: string; label: string }[] = [
   { value: "retail", label: my.businessType.retail },
@@ -43,6 +66,73 @@ function numToStr(n: number | null): string {
 function strToNum(s: string): number | null {
   const n = parseInt(s.replace(/[^0-9]/g, ""), 10);
   return Number.isFinite(n) ? n : null;
+}
+
+// ── List-field parse/format (one item per line, "name : value" optional) ──────
+
+function listToText(items: string[]): string {
+  return items.join("\n");
+}
+function textToList(text: string): string[] {
+  return text
+    .split(/[\n,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 50);
+}
+
+function productsToText(items: ProductSeed[]): string {
+  return items.map((p) => (p.priceMmk ? `${p.name} : ${p.priceMmk}` : p.name)).join("\n");
+}
+function textToProducts(text: string): ProductSeed[] {
+  return text
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [name, rawPrice] = line.split(":").map((s) => s?.trim() ?? "");
+      const price = parseInt((rawPrice ?? "").replace(/[^0-9]/g, ""), 10);
+      return name
+        ? { name: name.slice(0, 80), ...(Number.isFinite(price) && price > 0 ? { priceMmk: price } : {}) }
+        : null;
+    })
+    .filter((x): x is ProductSeed => x !== null)
+    .slice(0, 50);
+}
+
+function suppliersToText(items: SupplierSeed[]): string {
+  return items.map((s) => (s.supplies ? `${s.name} : ${s.supplies}` : s.name)).join("\n");
+}
+function textToSuppliers(text: string): SupplierSeed[] {
+  return text
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [name, supplies] = line.split(":").map((s) => s?.trim() ?? "");
+      return name ? { name: name.slice(0, 80), ...(supplies ? { supplies: supplies.slice(0, 120) } : {}) } : null;
+    })
+    .filter((x): x is SupplierSeed => x !== null)
+    .slice(0, 30);
+}
+
+function expensesToText(items: ExpenseSeed[]): string {
+  return items.map((e) => (e.monthlyMmk ? `${e.category} : ${e.monthlyMmk}` : e.category)).join("\n");
+}
+function textToExpenses(text: string): ExpenseSeed[] {
+  return text
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [category, rawAmount] = line.split(":").map((s) => s?.trim() ?? "");
+      const amount = parseInt((rawAmount ?? "").replace(/[^0-9]/g, ""), 10);
+      return category
+        ? { category: category.slice(0, 40), ...(Number.isFinite(amount) && amount > 0 ? { monthlyMmk: amount } : {}) }
+        : null;
+    })
+    .filter((x): x is ExpenseSeed => x !== null)
+    .slice(0, 20);
 }
 
 export default function BusinessProfileScreen() {
@@ -74,9 +164,23 @@ export default function BusinessProfileScreen() {
     setSaving(true);
     try {
       await saveProfile(form);
-      // Profile feeds the AI insights — invalidate so the next visit regenerates.
+
+      // Mirror the edited fields into the local store so the Home greeting,
+      // header, and hero metric reflect the change without a reload.
+      const profileStore = useProfile.getState();
+      profileStore.setBusinessName(form.businessName);
+      const bt = toBusinessType(form.businessType);
+      if (bt) profileStore.setBusinessType(bt);
+
+      // Seed the query cache with the just-saved form so any mounted reader
+      // (ProfileNudge, manual-entry category picker) updates instantly, then
+      // invalidate dependent queries so they refetch fresh data.
+      queryClient.setQueryData(["profile"], form);
       await queryClient.invalidateQueries({ queryKey: ["profile"] });
       await queryClient.invalidateQueries({ queryKey: ["insights"] });
+      await queryClient.invalidateQueries({ queryKey: ["home"] });
+      await queryClient.invalidateQueries({ queryKey: ["reports"] });
+      await queryClient.invalidateQueries({ queryKey: ["analytics"] });
       setSaved(true);
     } finally {
       setSaving(false);
@@ -203,6 +307,50 @@ export default function BusinessProfileScreen() {
                 }
                 placeholder={my.businessProfile.competitorsPlaceholder}
                 style={styles.input}
+                placeholderTextColor={colors.text.tertiary}
+              />
+            </Field>
+
+            <Field label={my.businessProfile.customersLabel}>
+              <TextInput
+                value={listToText(form.customersSeed)}
+                onChangeText={(t) => set("customersSeed", textToList(t))}
+                placeholder={my.businessProfile.customersPlaceholder}
+                style={[styles.input, { minHeight: 96, textAlignVertical: "top" }]}
+                multiline
+                placeholderTextColor={colors.text.tertiary}
+              />
+            </Field>
+
+            <Field label={my.businessProfile.suppliersLabel}>
+              <TextInput
+                value={suppliersToText(form.suppliersSeed)}
+                onChangeText={(t) => set("suppliersSeed", textToSuppliers(t))}
+                placeholder={my.businessProfile.suppliersPlaceholder}
+                style={[styles.input, { minHeight: 96, textAlignVertical: "top" }]}
+                multiline
+                placeholderTextColor={colors.text.tertiary}
+              />
+            </Field>
+
+            <Field label={my.businessProfile.productsLabel}>
+              <TextInput
+                value={productsToText(form.productsSeed)}
+                onChangeText={(t) => set("productsSeed", textToProducts(t))}
+                placeholder={my.businessProfile.productsPlaceholder}
+                style={[styles.input, { minHeight: 96, textAlignVertical: "top" }]}
+                multiline
+                placeholderTextColor={colors.text.tertiary}
+              />
+            </Field>
+
+            <Field label={my.businessProfile.expenseCategoriesLabel}>
+              <TextInput
+                value={expensesToText(form.expensesSeed)}
+                onChangeText={(t) => set("expensesSeed", textToExpenses(t))}
+                placeholder={my.businessProfile.expenseCategoriesPlaceholder}
+                style={[styles.input, { minHeight: 96, textAlignVertical: "top" }]}
+                multiline
                 placeholderTextColor={colors.text.tertiary}
               />
             </Field>

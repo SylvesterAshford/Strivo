@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { authenticateMobileRequest, getOrCreateMobileWorkspace } from "@/lib/auth/mobile";
-import { db } from "@/db/client";
+import { withMobileAuth } from "@/lib/auth/mobile";
 import { facts } from "@/db/schema";
 import { createId } from "@/lib/id";
 import { ColumnMapping, rowsToFacts, type ParsedSheet } from "@/lib/import/sales-excel";
@@ -17,9 +16,6 @@ const Body = z.object({
 });
 
 export async function POST(req: Request) {
-  const user = await authenticateMobileRequest(req);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const parsed = Body.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
@@ -31,25 +27,26 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "No usable rows found" }, { status: 400 });
   }
 
-  const workspace = await getOrCreateMobileWorkspace(user);
-  const now = new Date();
-  const rows = drafts.map((d) => ({
-    id: `fact_${createId()}`,
-    workspaceId: workspace.id,
-    recordingId: null,
-    kind: "sale" as const,
-    amountMmk: d.amountMmk,
-    description: d.description,
-    counterparty: d.counterparty,
-    occurredAt: d.occurredAt,
-    createdAt: now,
-  }));
+  return withMobileAuth(req, async (db, workspace) => {
+    const now = new Date();
+    const rows = drafts.map((d) => ({
+      id: `fact_${createId()}`,
+      workspaceId: workspace.id,
+      recordingId: null,
+      kind: "sale" as const,
+      amountMmk: d.amountMmk,
+      description: d.description,
+      counterparty: d.counterparty,
+      occurredAt: d.occurredAt,
+      createdAt: now,
+    }));
 
-  // Batch insert. Drizzle handles arrays natively; no row-by-row.
-  await db.insert(facts).values(rows);
+    // Batch insert. Drizzle handles arrays natively; no row-by-row.
+    await db.insert(facts).values(rows);
 
-  // The new history will reshape SWOT/forecast — kick a background regen.
-  triggerInsightsRegen(workspace.id);
+    // The new history will reshape SWOT/forecast — kick a background regen.
+    triggerInsightsRegen(workspace.id);
 
-  return NextResponse.json({ inserted: rows.length });
+    return NextResponse.json({ inserted: rows.length });
+  });
 }

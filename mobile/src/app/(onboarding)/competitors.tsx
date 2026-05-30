@@ -33,8 +33,8 @@ export default function CompetitorsStep() {
 
   return (
     <WizardStep
-      step={6}
-      totalSteps={11}
+      step={5}
+      totalSteps={10}
       title={my.onboarding.competitorsTitle}
       subtitle={my.onboarding.competitorsSubtitle}
       ctaLabel={my.common.next}

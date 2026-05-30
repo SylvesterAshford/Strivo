@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { authenticateMobileRequest, getOrCreateMobileWorkspace } from "@/lib/auth/mobile";
-import { db } from "@/db/client";
+import {
+  authenticateMobileRequest,
+  getOrCreateMobileWorkspace,
+  withWorkspaceScope,
+} from "@/lib/auth/mobile";
 import { facts } from "@/db/schema";
 import { createId } from "@/lib/id";
 import { extractFacts } from "@/lib/extraction/mobile-facts";
@@ -26,6 +29,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  // LLM call outside any transaction.
   let drafts;
   try {
     drafts = await extractFacts(parsed.data.text);
@@ -48,11 +52,14 @@ export async function POST(req: Request) {
     amountMmk: d.amountMmk ?? null,
     description: d.description.slice(0, 200),
     counterparty: d.counterparty ?? null,
+    category: d.category ?? null,
     occurredAt: now,
     createdAt: now,
   }));
 
-  await db.insert(facts).values(rows);
+  await withWorkspaceScope(workspace.id, async (tx) => {
+    await tx.insert(facts).values(rows);
+  });
   triggerInsightsRegen(workspace.id);
 
   return NextResponse.json({ inserted: rows.length });

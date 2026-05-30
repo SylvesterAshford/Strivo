@@ -49,10 +49,22 @@ export default function HomeScreen() {
     }, [qc])
   );
 
+  // Show the data view when there's ANY financial activity — today, this week,
+  // or this month. The cold-start hero only shows on a truly empty workspace.
   const hasFacts =
     (home?.todaySalesMmk ?? 0) > 0 ||
     (home?.todayExpensesMmk ?? 0) > 0 ||
-    (home?.recentToday?.length ?? 0) > 0;
+    (home?.weekSalesMmk ?? 0) > 0 ||
+    (home?.monthRevenueMmk ?? 0) > 0 ||
+    (home?.outstandingMmk ?? 0) > 0 ||
+    (home?.recentFallback?.length ?? 0) > 0;
+
+  // When today has no entries, fall back to the most recent entries across
+  // all days so the feed is never empty for an active account.
+  const todayEntries = home?.recentToday ?? [];
+  const fallbackEntries = home?.recentFallback ?? [];
+  const entriesToShow = todayEntries.length > 0 ? todayEntries : fallbackEntries;
+  const entriesLabel = todayEntries.length > 0 ? "TODAY" : "RECENT";
 
   return (
     <Screen>
@@ -63,6 +75,8 @@ export default function HomeScreen() {
           <DailySummary
             todaySalesMmk={home.todaySalesMmk}
             yesterdaySalesMmk={home.yesterdaySalesMmk}
+            weekSalesMmk={home.weekSalesMmk}
+            monthRevenueMmk={home.monthRevenueMmk}
           />
           <HeroMetric metric={heroMetric} amountMmk={heroAmount(heroMetric, home)} />
           <AlertChips
@@ -70,7 +84,7 @@ export default function HomeScreen() {
             todaySalesMmk={home.todaySalesMmk}
             todayExpensesMmk={home.todayExpensesMmk}
           />
-          <RecentEntries entries={home.recentToday} />
+          <RecentEntries entries={entriesToShow} label={entriesLabel} />
         </>
       ) : (
         <ColdStartHero />

@@ -7,6 +7,7 @@ import { AppText } from "@/components/ui/AppText";
 import { WeekStrip } from "@/components/reports/WeekStrip";
 import { MonthSummary } from "@/components/reports/MonthSummary";
 import { CategoryBreakdown } from "@/components/reports/CategoryBreakdown";
+import { ExpenseCategoryBreakdown } from "@/components/reports/ExpenseCategoryBreakdown";
 import { TopCustomers } from "@/components/reports/TopCustomers";
 import { ReceivablesList } from "@/components/reports/ReceivablesList";
 import { fetchReports } from "@/lib/api";
@@ -32,8 +33,8 @@ export default function ReportsScreen() {
         <EmptyState
           icon="reports"
           headline={my.reports.emptyHeadline}
-          subline="Record sales and expenses to unlock your financial report"
-          ctaLabel={my.coldStart.micHint}
+          subline={my.reports.emptySubline}
+          ctaLabel={my.addData.title}
           onCta={() => router.push("/record")}
         />
       </Screen>
@@ -55,6 +56,7 @@ export default function ReportsScreen() {
             netMmk={data.month.netMmk}
           />
           <CategoryBreakdown categories={data.categories} />
+          <ExpenseCategoryBreakdown categories={data.expenseCategories ?? []} />
           <TopCustomers customers={data.topCustomers} />
           <ReceivablesList receivables={data.receivables} />
         </View>

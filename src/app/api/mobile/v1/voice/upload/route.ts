@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
-import { authenticateMobileRequest, getOrCreateMobileWorkspace } from "@/lib/auth/mobile";
+import {
+  authenticateMobileRequest,
+  getOrCreateMobileWorkspace,
+  withWorkspaceScope,
+} from "@/lib/auth/mobile";
 import { transcribeAudio } from "@/lib/transcription/gemini-audio";
 import { extractFacts } from "@/lib/extraction/mobile-facts";
-import { db } from "@/db/client";
 import { voiceRecordings } from "@/db/schema";
 import { createId } from "@/lib/id";
 
@@ -32,7 +35,8 @@ export async function POST(req: Request) {
 
   const workspace = await getOrCreateMobileWorkspace(user);
 
-  // Transcribe and extract in sequence (transcription first, extraction uses the text)
+  // Transcribe + extract outside any transaction — these are long LLM calls
+  // and we don't want to hold a DB connection open.
   let transcript: string;
   try {
     transcript = await transcribeAudio(audioBytes, mimeType);
@@ -43,13 +47,16 @@ export async function POST(req: Request) {
 
   const draftFacts = await extractFacts(transcript);
 
+  // Persist the recording inside a scoped transaction so RLS allows the insert.
   const recordingId = `vrec_${createId()}`;
-  await db.insert(voiceRecordings).values({
-    id: recordingId,
-    workspaceId: workspace.id,
-    durationSecs: Number.isFinite(durationSecs) ? durationSecs : undefined,
-    transcript,
-    transcribedAt: new Date(),
+  await withWorkspaceScope(workspace.id, async (tx) => {
+    await tx.insert(voiceRecordings).values({
+      id: recordingId,
+      workspaceId: workspace.id,
+      durationSecs: Number.isFinite(durationSecs) ? durationSecs : undefined,
+      transcript,
+      transcribedAt: new Date(),
+    });
   });
 
   return NextResponse.json({ recordingId, transcript, facts: draftFacts });

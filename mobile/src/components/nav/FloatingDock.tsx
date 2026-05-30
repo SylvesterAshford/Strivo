@@ -14,7 +14,7 @@ const TABS = [
   { href: "/profile", icon: "profile" },
 ] as const;
 
-const MID = 2; // mic splices between tab index 1 and 2
+const MID = 2; // add-data button splices between tab index 1 and 2
 
 export function FloatingDock() {
   const router = useRouter();
@@ -38,7 +38,7 @@ export function FloatingDock() {
 
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Record voice note"
+          accessibilityLabel="Add data"
           onPress={() => router.push("/record")}
           style={({ pressed }) => [
             styles.micWrap,
@@ -46,12 +46,12 @@ export function FloatingDock() {
           ]}
         >
           <LinearGradient
-            colors={colors.gradient.deepPlum}
+            colors={colors.gradient.brand}
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
             style={styles.mic}
           >
-            <Icon name="mic" size={24} color={colors.text.onDark} />
+            <Icon name="plus" size={26} color={colors.text.onDark} />
           </LinearGradient>
         </Pressable>
 

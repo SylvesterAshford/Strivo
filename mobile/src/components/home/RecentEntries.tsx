@@ -73,7 +73,7 @@ function EntryRow({
   );
 }
 
-export function RecentEntries({ entries }: { entries: RecentEntry[] }) {
+export function RecentEntries({ entries, label = "TODAY" }: { entries: RecentEntry[]; label?: string }) {
   const queryClient = useQueryClient();
 
   if (!entries.length) return null;
@@ -86,7 +86,7 @@ export function RecentEntries({ entries }: { entries: RecentEntry[] }) {
 
   return (
     <View style={styles.container}>
-      <Eyebrow style={{ marginBottom: spacing.sm }}>TODAY</Eyebrow>
+      <Eyebrow style={{ marginBottom: spacing.sm }}>{label}</Eyebrow>
       <View style={styles.list}>
         {entries.map((e, i) => (
           <View key={e.id}>

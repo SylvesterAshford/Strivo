@@ -50,6 +50,10 @@ export interface WorkspaceSync {
   id: string;
   name: string;
   businessDescription: string | null;
+  businessType: string | null;
+  // True when the backend workspace already has profile data (returning or
+  // seeded user). The client uses this to skip the onboarding wizard.
+  onboarded: boolean;
 }
 
 export async function syncWorkspace(): Promise<WorkspaceSync | null> {
@@ -83,6 +87,11 @@ export interface SupplierSeed {
   supplies?: string;
 }
 
+export interface ExpenseSeed {
+  category: string;
+  monthlyMmk?: number;
+}
+
 export interface BusinessProfile {
   businessName: string;
   businessType: string | null;
@@ -96,6 +105,7 @@ export interface BusinessProfile {
   salesPeriods: SalesPeriod[];
   salesValues: Partial<Record<SalesPeriod, number>>;
   monthlyExpensesMmk: number | null;
+  expensesSeed: ExpenseSeed[];
   competitorDetails: RivalDetail[];
   customersSeed: string[];
   productsSeed: ProductSeed[];
@@ -129,6 +139,7 @@ export interface RecentEntry {
   description: string;
   amountMmk: number | null;
   counterparty: string | null;
+  occurredAt?: string;
 }
 
 export interface HomeData {
@@ -139,6 +150,7 @@ export interface HomeData {
   monthRevenueMmk: number;
   outstandingMmk: number;
   recentToday: RecentEntry[];
+  recentFallback: RecentEntry[];
 }
 
 export async function fetchHome(): Promise<HomeData | null> {
@@ -170,11 +182,18 @@ export interface ReportCategory {
   count: number;
 }
 
+export interface ReportExpenseCategory {
+  category: string;
+  totalMmk: number;
+  count: number;
+}
+
 export interface ReportsData {
   week: WeekDay[];
   month: { salesMmk: number; expensesMmk: number; netMmk: number };
   topCustomers: ReportTopCustomer[];
   categories: ReportCategory[];
+  expenseCategories: ReportExpenseCategory[];
   receivables: {
     id: string;
     description: string;
@@ -200,6 +219,8 @@ export interface DraftFact {
   amountMmk?: number;
   description: string;
   counterparty?: string;
+  // Expense sub-category (e.g. "ဆိုင်ခ"). Optional on non-expense kinds.
+  category?: string;
 }
 
 export interface VoiceUploadResult {
@@ -306,6 +327,27 @@ export async function fetchAnalytics(): Promise<AnalyticsData | null> {
   } catch {
     return null;
   }
+}
+
+// ── Account ──────────────────────────────────────────────────────────────────
+
+/** Download all of the user's data as a JSON string. */
+export async function exportMyData(): Promise<string> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  const headers = new Headers();
+  if (token) headers.set("authorization", `Bearer ${token}`);
+  const res = await fetch(`${env.apiBaseUrl}/api/mobile/v1/users/me/export`, { headers });
+  if (!res.ok) {
+    throw new Error(`Export failed (${res.status})`);
+  }
+  return res.text();
+}
+
+/** Delete the authenticated user's workspace + facts + recordings, plus the
+ *  Supabase auth row when real auth is on. Cascades server-side. */
+export async function deleteMyAccount(): Promise<void> {
+  await authedJson<{ deleted: true }>("/api/mobile/v1/users/me", { method: "DELETE" });
 }
 
 // ── Excel sales import ──────────────────────────────────────────────────────
@@ -428,6 +470,79 @@ export async function importSalesText(text: string): Promise<{ inserted: number;
     },
     // Burmese fact extraction + 3 Gemini retries with backoff can take a
     // while; budget plenty of headroom so we aren't aborting mid-extraction.
+    240_000
+  );
+}
+
+// ── Excel/text expense import ───────────────────────────────────────────────
+
+export interface ExpenseColumnMapping {
+  date: number;
+  amount: number;
+  category: number;
+  description: number;
+  counterparty: number;
+}
+
+export interface ExpenseImportPreviewResponse {
+  headers: string[];
+  sampleRows: (string | number | null)[][];
+  rows: (string | number | null)[][];
+  mapping: ExpenseColumnMapping;
+  totalRows: number;
+}
+
+export async function importExpensesPreview(
+  fileUri: string,
+  fileName: string,
+  mimeType: string
+): Promise<ExpenseImportPreviewResponse> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+
+  const form = new FormData();
+  form.append("file", { uri: fileUri, type: mimeType, name: fileName } as unknown as Blob);
+
+  const headers = new Headers();
+  if (token) headers.set("authorization", `Bearer ${token}`);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 120_000);
+  let res: Response;
+  try {
+    res = await fetch(`${env.apiBaseUrl}/api/mobile/v1/expenses/import/preview`, {
+      method: "POST",
+      headers,
+      body: form,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(err.error ?? `Preview failed (${res.status})`);
+  }
+  return res.json() as Promise<ExpenseImportPreviewResponse>;
+}
+
+export async function importExpensesConfirm(
+  headers: string[],
+  rows: (string | number | null)[][],
+  mapping: ExpenseColumnMapping
+): Promise<{ inserted: number }> {
+  return authedJson<{ inserted: number }>("/api/mobile/v1/expenses/import/confirm", {
+    method: "POST",
+    body: JSON.stringify({ headers, rows, mapping }),
+  });
+}
+
+export async function importExpensesText(
+  text: string
+): Promise<{ inserted: number; error?: string }> {
+  return authedJson<{ inserted: number; error?: string }>(
+    "/api/mobile/v1/expenses/import/text",
+    { method: "POST", body: JSON.stringify({ text }) },
     240_000
   );
 }

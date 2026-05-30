@@ -22,9 +22,20 @@ export class GeminiProvider implements LLMProvider {
     // When GEMINI_PROXY_URL is set, route every request through the Supabase
     // Edge Function instead of hitting Google directly. Lets the backend run
     // anywhere (including networks that can't reach generativelanguage.*).
+    //
+    // The Supabase edge gateway requires an Authorization header (anon key).
+    // @google/genai's httpOptions.headers merges into every request — the
+    // cleanest way to inject the Supabase JWT without a custom fetch.
     this.client = new GoogleGenAI({
       apiKey,
-      ...(env.GEMINI_PROXY_URL && { httpOptions: { baseUrl: env.GEMINI_PROXY_URL } }),
+      ...(env.GEMINI_PROXY_URL && {
+        httpOptions: {
+          baseUrl: env.GEMINI_PROXY_URL,
+          ...(env.SUPABASE_ANON_KEY && {
+            headers: { authorization: `Bearer ${env.SUPABASE_ANON_KEY}` },
+          }),
+        },
+      }),
     });
   }
 
@@ -84,14 +95,18 @@ export class GeminiProvider implements LLMProvider {
       const text = result.text ?? "";
       // Strip fences in case Gemini wraps anyway
       const cleaned = text.replace(/```json\s*|\s*```/g, "").trim();
-      return JSON.parse(cleaned);
+      return parseLenientJson(cleaned);
     };
 
     let rawResult: unknown;
     try {
-      // Retry transient upstream 5xx (e.g. "UNAVAILABLE high demand") up to 3
-      // times with exponential backoff before bubbling up.
-      rawResult = await withRetries(attempt, { tries: 3, baseMs: 800 });
+      // Retry transient upstream 5xx (e.g. "UNAVAILABLE high demand"). Capped
+      // at 3 tries with short backoff (~400/800ms + jitter) so the WHOLE
+      // request stays under the mobile client's ~60s iOS native timeout —
+      // a longer retry budget caused "The request timed out" on the device.
+      // The proxy already rotates keys per attempt, so 3 tries covers the
+      // common transient blips without blowing the latency budget.
+      rawResult = await withRetries(attempt, { tries: 3, baseMs: 400 });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const retryable = isTransientUpstream(message);
@@ -130,6 +145,84 @@ export class GeminiProvider implements LLMProvider {
   }
 }
 
+/**
+ * Parse JSON from Gemini, repairing the common glitches that make a raw
+ * JSON.parse throw:
+ *   - trailing commas before } or ]  (`{"a":1,}` → `{"a":1}`)
+ *   - smart/curly quotes that Gemini sometimes emits in Burmese output
+ *   - truncated output (response hit the token cap mid-array) — we close any
+ *     open strings/brackets so the partial result still validates.
+ * Falls back to throwing the original SyntaxError if repair fails, so the
+ * retry-on-invalid path still kicks in.
+ */
+function parseLenientJson(raw: string): unknown {
+  // Fast path — most responses are already valid.
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // fall through to repair
+  }
+
+  let s = raw;
+
+  // Normalise smart quotes to straight quotes.
+  s = s.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
+
+  // Remove trailing commas before a closing brace/bracket.
+  s = s.replace(/,(\s*[}\]])/g, "$1");
+
+  try {
+    return JSON.parse(s);
+  } catch {
+    // Likely truncated mid-output. Drop the incomplete trailing element, then
+    // balance brackets. This recovers the rows Gemini DID finish emitting.
+    return JSON.parse(closeTruncatedJson(s));
+  }
+}
+
+/**
+ * Best-effort repair of a JSON string cut off mid-output (Gemini hit the
+ * maxOutputTokens cap). Strategy: cut back to the last fully-complete element
+ * (the last top-level/nested closing `}` or `]`), then re-balance the bracket
+ * stack so the partial array/object still parses. This keeps every row Gemini
+ * finished and discards the half-written final one.
+ */
+function closeTruncatedJson(s: string): string {
+  // Find the last position where a complete element closed (}, ], or a quoted
+  // string / primitive). Cutting at the last closing brace of a nested object
+  // is the common case for our `{ "facts": [ {...}, {...}, {...truncated`.
+  const lastBrace = s.lastIndexOf("}");
+  const lastBracket = s.lastIndexOf("]");
+  const cut = Math.max(lastBrace, lastBracket);
+
+  // If we never closed a single element, fall back to closing dangling string.
+  let body = cut >= 0 ? s.slice(0, cut + 1) : s;
+
+  // Re-scan the trimmed body to compute which brackets remain open.
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{" || ch === "[") stack.push(ch);
+    else if (ch === "}" || ch === "]") stack.pop();
+  }
+
+  if (inString) body += '"';
+  body = body.replace(/,\s*$/, "");
+  for (let i = stack.length - 1; i >= 0; i--) {
+    body += stack[i] === "{" ? "}" : "]";
+  }
+  return body;
+}
+
 /** Match Google's "model overloaded" 5xx and 429 rate-limit error messages. */
 function isTransientUpstream(message: string): boolean {
   return /\b(503|502|504|UNAVAILABLE|RESOURCE_EXHAUSTED|429|rate.?limit|overload|high demand)\b/i.test(message);
@@ -148,7 +241,10 @@ async function withRetries<T>(
       const msg = err instanceof Error ? err.message : String(err);
       if (!isTransientUpstream(msg)) throw err;
       if (i < tries - 1) {
-        const delay = baseMs * Math.pow(2, i); // 800, 1600, 3200ms
+        // Exponential backoff + jitter so parallel callers don't all retry
+        // at exactly the same moment (thundering herd on free-tier quotas).
+        const jitter = Math.random() * 400;
+        const delay = baseMs * Math.pow(2, i) + jitter; // ~800, ~1600, ~3200ms
         await new Promise((r) => setTimeout(r, delay));
       }
     }

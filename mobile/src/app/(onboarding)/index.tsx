@@ -30,7 +30,7 @@ export default function ProductStep() {
       businessType: type,
       productService: product.trim(),
     });
-    router.push("/(onboarding)/pos");
+    router.push("/(onboarding)/periods");
   };
 
   const canContinue = name.trim().length > 0 && !!type && product.trim().length > 0;
@@ -38,7 +38,7 @@ export default function ProductStep() {
   return (
     <WizardStep
       step={1}
-      totalSteps={11}
+      totalSteps={10}
       title={my.onboarding.productTitle}
       subtitle={my.onboarding.productSubtitle}
       ctaLabel={my.common.next}

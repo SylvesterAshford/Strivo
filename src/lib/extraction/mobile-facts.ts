@@ -10,6 +10,9 @@ export const DraftFact = z.object({
   amountMmk: z.number().int().min(0).optional(),
   description: z.string().min(1),
   counterparty: z.string().optional(),
+  // Expense category (e.g. rent, wages, utilities). Optional and only
+  // meaningful for kind="expense".
+  category: z.string().max(40).optional(),
 });
 
 export type DraftFact = z.infer<typeof DraftFact>;
@@ -24,7 +27,8 @@ const SCHEMA_DESC = `{
       "kind": "sale" | "expense" | "receivable" | "note",
       "amountMmk": number (integer, MMK, optional),
       "description": "short description in Burmese or English",
-      "counterparty": "customer / supplier name if mentioned (optional)"
+      "counterparty": "customer / supplier name if mentioned (optional)",
+      "category": "expense category (rent, wages, supplies, etc) — only set when kind='expense' (optional)"
     }
   ]
 }`;
@@ -40,6 +44,7 @@ Rules:
 - amountMmk: integer kyats only; omit if no amount stated
 - description: keep it short (≤ 60 chars), in the language used by the speaker
 - counterparty: name of customer or supplier if mentioned; omit otherwise
+- category: only for kind="expense" — short word/phrase for the expense bucket (ဆိုင်ခ, လုပ်ခ, ပစ္စည်းသွင်း, မီးခ, ရေခ, သယ်ယူခ etc). Omit for non-expense kinds.
 - Extract ALL facts; one fact per financial event
 
 Transcript:
@@ -53,9 +58,10 @@ export async function extractFacts(transcript: string): Promise<DraftFact[]> {
     schemaDescription: SCHEMA_DESC,
     retryOnInvalid: true,
     temperature: 0,
-    // Burmese descriptions are ~5× the token count of English. 4096 covers
-    // ~30 facts comfortably; pasted ledgers can exceed the 1K we started with.
-    maxTokens: 4096,
+    // Burmese descriptions are ~5× the token count of English. Pasted ledgers
+    // can run 50+ rows; 8192 covers ~60 facts before truncation (the lenient
+    // JSON parser recovers a partial array if it still overruns).
+    maxTokens: 8192,
   });
   return result.facts;
 }

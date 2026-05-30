@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Lattice",
+    "name": "Strivo",
     "slug": "lattice-msme",
     "scheme": "lattice",
     "version": "1.0.0",
@@ -8,6 +8,11 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F8F5FB"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.sylvester67.strivo",
@@ -17,18 +22,13 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#F8F4F1",
+        "backgroundColor": "#F8F5FB",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "permissions": [
-        "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
-      ],
+      "permissions": [],
       "package": "com.sylvester67.strivo"
     },
     "web": {
@@ -38,13 +38,6 @@
       "expo-router",
       "expo-font",
       "expo-secure-store",
-      [
-        "expo-audio",
-        {
-          "microphonePermission": "Allow Lattice to access your microphone to record business notes.",
-          "enableBackgroundRecording": false
-        }
-      ],
       "expo-web-browser"
     ],
     "extra": {

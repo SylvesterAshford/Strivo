@@ -1,58 +1,64 @@
 import { Pressable, View, StyleSheet } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { AppText } from "@/components/ui/AppText";
 import { Icon } from "@/components/ui/Icon";
 import { colors, radius, spacing } from "@/theme/tokens";
 import { my } from "@/i18n/my";
 
-// design.md 6.1 — single pinned card on a fresh home: plum-peach gradient,
-// centered mic icon, Burmese prompt. Tapping the card == tapping the dock mic.
 export function ColdStartHero() {
   const router = useRouter();
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={my.coldStart.micHint}
-      onPress={() => router.push("/record")}
-      style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.98 : 1 }] }]}
-    >
-      <LinearGradient
-        colors={colors.gradient.plumPeach}
-        locations={colors.gradient.plumPeachLocations}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.card}
+    <View style={{ gap: spacing.lg }}>
+      <Pressable
+        onPress={() => router.push("/record")}
+        style={({ pressed }) => [styles.card, pressed && { opacity: 0.8, transform: [{ scale: 0.99 }] }]}
       >
-        <View style={styles.iconRing}>
-          <Icon name="mic" size={30} color={colors.accent.base} />
+        <View style={styles.iconBox}>
+          <Icon name="plus" size={22} color={colors.accent.base} />
         </View>
-        {/* Extra paddingTop offsets Myanmar ascenders that extend above the line box
-            and would otherwise be clipped by the gradient's overflow:hidden boundary. */}
-        <View style={{ paddingTop: 12 }}>
-          <AppText variant="subhead" style={{ textAlign: "center", marginTop: spacing.lg }}>
-            {my.coldStart.heroPrompt}
+        <View style={{ flex: 1, marginLeft: spacing.lg }}>
+          <AppText variant="title">{my.addData.title}</AppText>
+          <AppText variant="caption" color="secondary" style={{ marginTop: 2 }}>
+            {my.addData.subtitle}
           </AppText>
         </View>
-      </LinearGradient>
-    </Pressable>
+        <Icon name="chevron-right" size={18} color={colors.text.tertiary} />
+      </Pressable>
+
+      <Pressable
+        onPress={() => router.push("/manual-entry")}
+        style={({ pressed }) => [styles.card, pressed && { opacity: 0.8, transform: [{ scale: 0.99 }] }]}
+      >
+        <View style={[styles.iconBox, { backgroundColor: colors.bg.iconNeutral }]}>
+          <Icon name="pencil" size={22} color={colors.text.secondary} />
+        </View>
+        <View style={{ flex: 1, marginLeft: spacing.lg }}>
+          <AppText variant="title">{my.addData.manualTitle}</AppText>
+          <AppText variant="caption" color="secondary" style={{ marginTop: 2 }}>
+            {my.addData.manualSubtitle}
+          </AppText>
+        </View>
+        <Icon name="chevron-right" size={18} color={colors.text.tertiary} />
+      </Pressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: radius.pinnedCard,
-    paddingVertical: spacing["5xl"],
-    paddingHorizontal: spacing["3xl"],
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    minHeight: 180,
+    backgroundColor: colors.bg.surface,
+    borderRadius: radius.pinnedCard,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    padding: spacing.xl,
   },
-  iconRing: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: "rgba(255,255,255,0.6)",
+  iconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.iconContainer,
+    backgroundColor: colors.accent.soft,
     alignItems: "center",
     justifyContent: "center",
   },

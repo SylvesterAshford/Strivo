@@ -26,6 +26,13 @@ import {
   IconBulb,
   IconShieldCheck,
   IconChartLine,
+  IconEye,
+  IconEyeOff,
+  IconLogin2,
+  IconBrandGoogle,
+  IconPencil,
+  IconFileSpreadsheet,
+  IconPlus,
   type IconProps,
 } from "@tabler/icons-react-native";
 import { colors } from "@/theme/tokens";
@@ -56,6 +63,13 @@ const REGISTRY = {
   bulb: IconBulb,
   "shield-check": IconShieldCheck,
   "chart-line": IconChartLine,
+  eye: IconEye,
+  "eye-off": IconEyeOff,
+  login: IconLogin2,
+  google: IconBrandGoogle,
+  pencil: IconPencil,
+  spreadsheet: IconFileSpreadsheet,
+  plus: IconPlus,
 } as const;
 
 export type IconName = keyof typeof REGISTRY;

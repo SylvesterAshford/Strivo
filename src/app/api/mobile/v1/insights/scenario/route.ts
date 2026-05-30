@@ -43,7 +43,7 @@ export async function POST(req: Request) {
   };
 
   try {
-    const result = await runScenario(insights, profile, parsed.data.scenario);
+    const result = await runScenario(insights, profile, parsed.data.scenario, workspace.id);
     return NextResponse.json({ ready: true, result });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown scenario error";

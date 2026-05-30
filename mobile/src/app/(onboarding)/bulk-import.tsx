@@ -124,8 +124,8 @@ export default function BulkImportStep() {
   if (mode === "excel" && preview && mapping) {
     return (
       <WizardStep
-        step={11}
-        totalSteps={11}
+        step={10}
+        totalSteps={10}
         title={my.onboarding.bulkConfirmTitle}
         subtitle={my.onboarding.bulkRows(preview.totalRows)}
         ctaLabel={busy ? my.onboarding.bulkImporting : my.onboarding.bulkImportAndFinish}
@@ -166,8 +166,8 @@ export default function BulkImportStep() {
   if (mode === "paste") {
     return (
       <WizardStep
-        step={11}
-        totalSteps={11}
+        step={10}
+        totalSteps={10}
         title={my.onboarding.bulkPasteTitle}
         subtitle={my.onboarding.bulkPasteSubtitle}
         ctaLabel={busy ? my.onboarding.bulkImporting : my.onboarding.bulkImportAndFinish}
@@ -199,8 +199,8 @@ export default function BulkImportStep() {
   // ── Initial mode — three choices ──────────────────────────────────────
   return (
     <WizardStep
-      step={11}
-      totalSteps={11}
+      step={10}
+      totalSteps={10}
       title={my.onboarding.bulkTitle}
       subtitle={my.onboarding.bulkSubtitle}
       ctaLabel={busy ? my.onboarding.bulkSaving : my.onboarding.bulkSkipFinish}

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { authenticateMobileRequest, getOrCreateMobileWorkspace } from "@/lib/auth/mobile";
-import { db } from "@/db/client";
+import { withMobileAuth } from "@/lib/auth/mobile";
 import { workspaces } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
@@ -25,6 +24,7 @@ function serialize(ws: {
   customersSeed: string[] | null;
   productsSeed: { name: string; priceMmk?: number }[] | null;
   suppliersSeed: { name: string; supplies?: string }[] | null;
+  expensesSeed: { category: string; monthlyMmk?: number }[] | null;
 }) {
   return {
     businessName: ws.name,
@@ -39,6 +39,7 @@ function serialize(ws: {
     salesPeriods: ws.salesPeriods ?? [],
     salesValues: ws.salesValues ?? {},
     monthlyExpensesMmk: ws.monthlyExpensesMmk,
+    expensesSeed: ws.expensesSeed ?? [],
     competitorDetails: ws.competitorDetails ?? [],
     customersSeed: ws.customersSeed ?? [],
     productsSeed: ws.productsSeed ?? [],
@@ -47,11 +48,9 @@ function serialize(ws: {
 }
 
 export async function GET(req: Request) {
-  const user = await authenticateMobileRequest(req);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const workspace = await getOrCreateMobileWorkspace(user);
-  return NextResponse.json({ profile: serialize(workspace) });
+  return withMobileAuth(req, async (_db, workspace) => {
+    return NextResponse.json({ profile: serialize(workspace) });
+  });
 }
 
 const SalesPeriodEnum = z.enum(["daily", "weekly", "monthly", "yearly"]);
@@ -98,22 +97,23 @@ const ProfileBody = z.object({
     .array(z.object({ name: z.string().min(1).max(80), supplies: z.string().max(120).optional() }))
     .max(30)
     .optional(),
+  expensesSeed: z
+    .array(z.object({ category: z.string().min(1).max(40), monthlyMmk: z.number().int().min(0).optional() }))
+    .max(20)
+    .optional(),
 });
 
 export async function PUT(req: Request) {
-  const user = await authenticateMobileRequest(req);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const parsed = ProfileBody.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const workspace = await getOrCreateMobileWorkspace(user);
-  const b = parsed.data;
+  return withMobileAuth(req, async (db, workspace) => {
+    const b = parsed.data;
 
-  const [updated] = await db
-    .update(workspaces)
+    const [updated] = await db
+      .update(workspaces)
     .set({
       ...(b.businessName !== undefined && { name: b.businessName }),
       ...(b.businessType !== undefined && { businessType: b.businessType }),
@@ -131,10 +131,12 @@ export async function PUT(req: Request) {
       ...(b.customersSeed !== undefined && { customersSeed: b.customersSeed }),
       ...(b.productsSeed !== undefined && { productsSeed: b.productsSeed }),
       ...(b.suppliersSeed !== undefined && { suppliersSeed: b.suppliersSeed }),
+      ...(b.expensesSeed !== undefined && { expensesSeed: b.expensesSeed }),
       updatedAt: new Date(),
     })
-    .where(eq(workspaces.id, workspace.id))
-    .returning();
+      .where(eq(workspaces.id, workspace.id))
+      .returning();
 
-  return NextResponse.json({ profile: serialize(updated) });
+    return NextResponse.json({ profile: serialize(updated) });
+  });
 }

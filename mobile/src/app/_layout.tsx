@@ -6,15 +6,17 @@ import { View } from "react-native";
 import { useAppFonts } from "@/theme/fonts";
 import { QueryProvider } from "@/lib/query";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { LoadingScreen } from "@/components/layout/LoadingScreen";
 import { useProfile } from "@/stores/profile";
 import { env, isSupabaseConfigured } from "@/lib/env";
 import { colors } from "@/theme/tokens";
 
 function RootNavigator() {
-  const { session, initializing } = useAuth();
+  const { session, initializing, syncing } = useAuth();
   const onboarded = useProfile((s) => s.onboarded);
 
-  if (initializing) return <View style={{ flex: 1, backgroundColor: colors.bg.base }} />;
+  // Show a branded loading screen while resolving auth + prefetching tab data.
+  if (initializing || syncing) return <LoadingScreen message="ဒေတာ ဆွဲယူနေသည်..." />;
 
   // ── AUTH BYPASS (env-gated) ────────────────────────────────────────────────
   // Flip EXPO_PUBLIC_AUTH_BYPASS=false in mobile/.env to exercise the real
@@ -23,7 +25,6 @@ function RootNavigator() {
     return (
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg.base } }}>
         <Stack.Screen name="(app)" />
-        <Stack.Screen name="record" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
       </Stack>
     );
   }
@@ -44,7 +45,6 @@ function RootNavigator() {
 
       <Stack.Protected guard={authed && onboarded}>
         <Stack.Screen name="(app)" />
-        <Stack.Screen name="record" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
       </Stack.Protected>
     </Stack>
   );
@@ -59,7 +59,7 @@ export default function RootLayout() {
         <QueryProvider>
           <AuthProvider>
             <StatusBar style="dark" />
-            {fontsLoaded ? <RootNavigator /> : <View style={{ flex: 1, backgroundColor: colors.bg.base }} />}
+            {fontsLoaded ? <RootNavigator /> : <LoadingScreen />}
           </AuthProvider>
         </QueryProvider>
       </SafeAreaProvider>

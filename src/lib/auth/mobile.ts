@@ -1,4 +1,6 @@
 import { createClient, type User } from "@supabase/supabase-js";
+import { NextResponse } from "next/server";
+import { sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { users, workspaces } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -29,9 +31,8 @@ function bearerToken(req: Request): string | null {
 }
 
 // ── Dev bypass ────────────────────────────────────────────────────────────────
-// In development, skip JWT validation entirely. The mobile app sends no token
-// and the backend returns a stable fake user so every API route works.
-// NEVER ship this to production — the guard is NODE_ENV, not a flag.
+// In development, skip JWT validation entirely. Controlled by the AUTH_BYPASS
+// env var (defaults true in dev, false in prod).
 const DEV_USER: User = {
   id: "dev_local_user",
   aud: "authenticated",
@@ -45,9 +46,6 @@ const DEV_USER: User = {
 /**
  * Validate the Supabase JWT on a mobile request. Returns the Supabase user, or
  * null if the header is missing or the token is invalid/expired.
- *
- * When AUTH_BYPASS is true (default in development), returns the DEV_USER stub
- * so the mobile app can be tested without a real Supabase session.
  */
 export async function authenticateMobileRequest(req: Request): Promise<User | null> {
   if (env.authBypass) {
@@ -65,33 +63,91 @@ export async function authenticateMobileRequest(req: Request): Promise<User | nu
 
 /**
  * Map a Supabase mobile user to a workspace, creating the user row and
- * workspace on first sign-in. One workspace per user, mirroring the web flow.
+ * workspace on first sign-in. Runs inside a transaction with the
+ * `app.user_id` session variable set so RLS policies on users/workspaces
+ * permit the upsert.
  */
 export async function getOrCreateMobileWorkspace(user: User) {
-  const existingUser = await db.query.users.findFirst({
-    where: eq(users.id, user.id),
-  });
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT set_config('app.user_id', ${user.id}, true)`);
 
-  if (!existingUser) {
-    const email = user.email ?? (user.phone ? `${user.phone}@phone.lattice` : `${user.id}@anon.lattice`);
-    await db.insert(users).values({ id: user.id, email });
-  }
+    const existingUser = await tx.query.users.findFirst({
+      where: eq(users.id, user.id),
+    });
 
-  const existing = await db.query.workspaces.findFirst({
-    where: eq(workspaces.ownerId, user.id),
-  });
-  if (existing) return existing;
+    if (!existingUser) {
+      const email = user.email ?? (user.phone ? `${user.phone}@phone.lattice` : `${user.id}@anon.lattice`);
+      await tx.insert(users).values({ id: user.id, email });
+    }
 
-  const newWorkspaceId = `ws_${createId()}`;
-  await db.insert(workspaces).values({
-    id: newWorkspaceId,
-    ownerId: user.id,
-    name: "My workspace",
-  });
+    const existing = await tx.query.workspaces.findFirst({
+      where: eq(workspaces.ownerId, user.id),
+    });
+    if (existing) return existing;
 
-  const created = await db.query.workspaces.findFirst({
-    where: eq(workspaces.id, newWorkspaceId),
+    const newWorkspaceId = `ws_${createId()}`;
+    await tx.insert(workspaces).values({
+      id: newWorkspaceId,
+      ownerId: user.id,
+      name: "My workspace",
+    });
+
+    const created = await tx.query.workspaces.findFirst({
+      where: eq(workspaces.id, newWorkspaceId),
+    });
+    if (!created) throw new Error("Failed to create workspace");
+    return created;
   });
-  if (!created) throw new Error("Failed to create workspace");
-  return created;
 }
+
+// ── Per-request scoped wrapper ────────────────────────────────────────────────
+//
+// Routes use withMobileAuth(req, async (db, workspace) => { ... }) to run
+// their body inside a transaction with both `app.user_id` and
+// `app.workspace_id` set. RLS policies enforce per-workspace isolation
+// regardless of what the route code does — every query inside this
+// transaction can only see rows where workspace_id = workspace.id.
+//
+// The `db` parameter handed to the callback is actually the Drizzle
+// transaction. It supports the same query API as the top-level `db`.
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type WorkspaceRow = Awaited<ReturnType<typeof getOrCreateMobileWorkspace>>;
+
+/**
+ * Authenticate the request, resolve the workspace, then run `fn` inside a
+ * transaction with RLS session variables set. Returns whatever the callback
+ * returns, or a 401 Response if the caller is unauthenticated.
+ */
+export async function withMobileAuth<T>(
+  req: Request,
+  fn: (tx: Tx, workspace: WorkspaceRow, user: User) => Promise<T>
+): Promise<T | NextResponse> {
+  const user = await authenticateMobileRequest(req);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const workspace = await getOrCreateMobileWorkspace(user);
+
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT set_config('app.user_id', ${user.id}, true)`);
+    await tx.execute(sql`SELECT set_config('app.workspace_id', ${workspace.id}, true)`);
+    return fn(tx, workspace, user);
+  });
+}
+
+/**
+ * Run a callback in a scoped transaction without auth. Use this when a
+ * background job (or a route that already authenticated separately) needs
+ * to make DB queries with RLS satisfied.
+ */
+export async function withWorkspaceScope<T>(
+  workspaceId: string,
+  fn: (tx: Tx) => Promise<T>
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT set_config('app.workspace_id', ${workspaceId}, true)`);
+    return fn(tx);
+  });
+}
+
+export type { Tx, WorkspaceRow };

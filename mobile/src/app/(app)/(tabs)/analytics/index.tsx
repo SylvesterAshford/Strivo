@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Screen } from "@/components/layout/Screen";
 import { AppText } from "@/components/ui/AppText";
 import { Button } from "@/components/ui/Button";
@@ -14,35 +14,68 @@ import { my } from "@/i18n/my";
 
 export default function AnalyticsOverview() {
   const router = useRouter();
-  // Don't auto-fire AI analysis on tab open — wait for the user to tap.
-  const [triggered, setTriggered] = useState(false);
+  const queryClient = useQueryClient();
+
+  // Auto-trigger if insights are already cached (user previously generated
+  // them — no need to show the generate card again on revisit).
+  const [triggered, setTriggered] = useState(() => {
+    return queryClient.getQueryData(["insights"]) != null;
+  });
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ["insights"],
     queryFn: fetchInsights,
-    staleTime: 5 * 60_000,
+    staleTime: 10 * 60_000,
     refetchOnWindowFocus: false,
     enabled: triggered,
   });
 
   // Initial state — show the Generate card.
   if (!triggered) {
+    const features = [
+      { icon: "chart-line" as const, label: my.analytics.generateFeatureTrend },
+      { icon: "bulb" as const, label: my.analytics.generateFeatureSwot },
+      { icon: "profile" as const, label: my.analytics.generateFeatureSegments },
+      { icon: "sparkles" as const, label: my.analytics.generateFeatureRecs },
+    ];
     return (
       <Screen>
         <AppText variant="subhead" style={{ marginBottom: spacing.lg }}>
           {my.analytics.title}
         </AppText>
         <View style={styles.generateCard}>
-          <View style={styles.iconBox}>
-            <Icon name="sparkles" size={28} color={colors.accent.base} />
+          <View style={styles.generateHeader}>
+            <View style={styles.headerIcon}>
+              <Icon name="sparkles" size={20} color={colors.accent.base} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <AppText variant="monoEyebrow" color="tertiary">
+                {my.analytics.generateEyebrow}
+              </AppText>
+              <AppText variant="subhead" color="primary" style={{ marginTop: 2 }}>
+                {my.analytics.generateTitle}
+              </AppText>
+            </View>
           </View>
-          <AppText variant="serifLg" color="primary" style={{ textAlign: "center" }}>
-            {my.analytics.generateTitle}
-          </AppText>
-          <AppText variant="body" color="secondary" style={{ textAlign: "center" }}>
+
+          <AppText variant="body" color="secondary" style={{ marginTop: spacing.md }}>
             {my.analytics.generateBody}
           </AppText>
-          <Button label={my.analytics.generateCta} onPress={() => setTriggered(true)} />
+
+          <View style={{ marginTop: spacing.lg, gap: spacing.md }}>
+            {features.map((f) => (
+              <View key={f.label} style={styles.featureRow}>
+                <Icon name={f.icon} size={16} color={colors.accent.base} />
+                <AppText variant="body" color="primary" style={{ flex: 1 }}>
+                  {f.label}
+                </AppText>
+              </View>
+            ))}
+          </View>
+
+          <View style={{ marginTop: spacing["2xl"] }}>
+            <Button label={my.analytics.generateCta} onPress={() => setTriggered(true)} />
+          </View>
         </View>
       </Screen>
     );
@@ -74,15 +107,17 @@ export default function AnalyticsOverview() {
         </AppText>
         <View style={styles.generateCard}>
           <View style={styles.iconBox}>
-            <Icon name="mic" size={28} color={colors.accent.base} />
+            <Icon name="spreadsheet" size={26} color={colors.accent.base} />
           </View>
-          <AppText variant="serifLg" color="primary" style={{ textAlign: "center" }}>
+          <AppText variant="subhead" color="primary" style={{ textAlign: "center" }}>
             {my.analytics.emptyHeadline}
           </AppText>
           <AppText variant="body" color="secondary" style={{ textAlign: "center" }}>
-            Record sales and expenses to unlock AI insights
+            {my.analytics.emptyBody}
           </AppText>
-          <Button label={my.coldStart.micHint} onPress={() => router.push("/record")} />
+          <View style={{ alignSelf: "stretch" }}>
+            <Button label={my.addData.title} onPress={() => router.push("/record")} />
+          </View>
         </View>
       </Screen>
     );
@@ -172,12 +207,29 @@ const styles = StyleSheet.create({
   generateCard: {
     backgroundColor: colors.bg.surface,
     borderRadius: radius.pinnedCard,
-    padding: spacing["4xl"],
+    padding: spacing["3xl"],
     borderWidth: 1,
     borderColor: colors.border.default,
-    alignItems: "center",
-    gap: spacing.lg,
   },
+  generateHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  headerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.iconContainer,
+    backgroundColor: colors.accent.soft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  featureRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  // Empty-state (no data yet) variant keeps the centered icon treatment.
   iconBox: {
     width: 64,
     height: 64,
@@ -185,5 +237,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg.iconSoft,
     alignItems: "center",
     justifyContent: "center",
+    alignSelf: "center",
+    marginBottom: spacing.lg,
   },
 });

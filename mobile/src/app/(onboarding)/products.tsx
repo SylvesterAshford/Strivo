@@ -94,8 +94,8 @@ export default function ProductsStep() {
 
   return (
     <WizardStep
-      step={9}
-      totalSteps={11}
+      step={8}
+      totalSteps={10}
       title={my.onboarding.productsTitle}
       subtitle={my.onboarding.productsSubtitle}
       ctaLabel={my.common.next}

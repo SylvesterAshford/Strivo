@@ -10,13 +10,13 @@ import {
   Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppText } from "@/components/ui/AppText";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { Icon } from "@/components/ui/Icon";
 import { colors, spacing, radius } from "@/theme/tokens";
 import { my } from "@/i18n/my";
-import { confirmFacts, type DraftFact } from "@/lib/api";
+import { confirmFacts, fetchProfile, type DraftFact } from "@/lib/api";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type Kind = DraftFact["kind"];
@@ -39,10 +39,21 @@ export default function ManualEntryScreen() {
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [counterparty, setCounterparty] = useState("");
+  const [category, setCategory] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Pull onboarding expense categories so the user can quick-pick instead of
+  // retyping. Cached for the whole session — these change rarely.
+  const { data: profile } = useQuery({
+    queryKey: ["profile"],
+    queryFn: fetchProfile,
+    staleTime: 5 * 60_000,
+  });
+  const expenseCategories = profile?.expensesSeed ?? [];
+
   const showAmount = AMOUNT_KINDS.includes(kind);
+  const showCategory = kind === "expense";
   const canSave = description.trim().length > 0;
 
   const handleSave = async () => {
@@ -59,6 +70,7 @@ export default function ManualEntryScreen() {
         description: description.trim(),
         amountMmk,
         counterparty: counterparty.trim() || undefined,
+        category: showCategory && category.trim() ? category.trim() : undefined,
       };
 
       await confirmFacts(null, [fact]);
@@ -146,6 +158,51 @@ export default function ManualEntryScreen() {
                   placeholderTextColor={colors.text.tertiary}
                   style={styles.input}
                   keyboardType="numeric"
+                />
+              </View>
+            </>
+          )}
+
+          {/* Category (expense only) */}
+          {showCategory && (
+            <>
+              <Eyebrow style={{ marginTop: spacing["2xl"], marginBottom: spacing.sm }}>
+                {my.manualEntry.categoryLabel}
+              </Eyebrow>
+              {expenseCategories.length > 0 ? (
+                <View style={[styles.kindRow, { marginBottom: spacing.sm }]}>
+                  {expenseCategories.map((c) => {
+                    const active = category === c.category;
+                    return (
+                      <Pressable
+                        key={c.category}
+                        onPress={() => setCategory(c.category)}
+                        style={[
+                          styles.kindPill,
+                          active && {
+                            backgroundColor: colors.accent.base,
+                            borderColor: colors.accent.base,
+                          },
+                        ]}
+                      >
+                        <AppText
+                          variant="caption"
+                          style={{ color: active ? "#fff" : colors.text.secondary }}
+                        >
+                          {c.category}
+                        </AppText>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
+              <View style={styles.inputBox}>
+                <TextInput
+                  value={category}
+                  onChangeText={setCategory}
+                  placeholder={my.manualEntry.categoryPlaceholder}
+                  placeholderTextColor={colors.text.tertiary}
+                  style={styles.input}
                 />
               </View>
             </>

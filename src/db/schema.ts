@@ -52,6 +52,9 @@ export const workspaces = pgTable(
     customersSeed: jsonb("customers_seed").$type<string[]>().default([]),
     productsSeed: jsonb("products_seed").$type<{ name: string; priceMmk?: number }[]>().default([]),
     suppliersSeed: jsonb("suppliers_seed").$type<{ name: string; supplies?: string }[]>().default([]),
+    // Recurring expense categories captured during onboarding. Each entry feeds
+    // the manual-entry category quick-pick and the Reports expense breakdown.
+    expensesSeed: jsonb("expenses_seed").$type<{ category: string; monthlyMmk?: number }[]>().default([]),
     branchesStatus: text("branches_status")
       .$type<"idle" | "generating" | "complete" | "failed">()
       .default("idle"),
@@ -394,6 +397,10 @@ export const facts = pgTable(
     amountMmk: integer("amount_mmk"),
     description: text("description").notNull(),
     counterparty: text("counterparty"),
+    // Sub-category for expenses (e.g. "ဆိုင်ခ" / "လုပ်ခ" / "ပစ္စည်းသွင်း").
+    // Optional on sale/receivable/note. Populated by manual entry, import flows,
+    // and the LLM extractor for free-text expense rows.
+    category: text("category"),
     occurredAt: timestamp("occurred_at").defaultNow().notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
@@ -402,6 +409,11 @@ export const facts = pgTable(
     workspaceDateIdx: index("fact_workspace_date_idx").on(
       t.workspaceId,
       t.occurredAt
+    ),
+    categoryIdx: index("fact_workspace_kind_category_idx").on(
+      t.workspaceId,
+      t.kind,
+      t.category
     ),
   })
 );

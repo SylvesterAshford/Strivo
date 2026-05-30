@@ -39,6 +39,7 @@ function buildBody(draft: OnboardingDraft): Partial<Parameters<typeof saveProfil
   if (draft.customersSeed.length) body.customersSeed = draft.customersSeed;
   if (draft.productsSeed.length) body.productsSeed = draft.productsSeed;
   if (draft.suppliersSeed.length) body.suppliersSeed = draft.suppliersSeed;
+  if (draft.expensesSeed.length) body.expensesSeed = draft.expensesSeed;
   return body;
 }
 

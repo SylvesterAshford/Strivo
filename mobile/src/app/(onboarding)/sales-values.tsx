@@ -48,8 +48,8 @@ export default function SalesValuesStep() {
 
   return (
     <WizardStep
-      step={4}
-      totalSteps={11}
+      step={3}
+      totalSteps={10}
       title={my.onboarding.salesValuesTitle}
       subtitle={my.onboarding.salesValuesSubtitle}
       ctaLabel={my.common.next}

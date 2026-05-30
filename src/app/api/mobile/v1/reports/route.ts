@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { authenticateMobileRequest, getOrCreateMobileWorkspace } from "@/lib/auth/mobile";
-import { db } from "@/db/client";
+import { withMobileAuth } from "@/lib/auth/mobile";
 import { facts } from "@/db/schema";
 import { eq, and, gte, lt, sum, count, sql, desc, isNotNull } from "drizzle-orm";
 
@@ -20,11 +19,8 @@ function weekWindow(): { dayStart: Date; dayEnd: Date; label: string }[] {
 }
 
 export async function GET(req: Request) {
-  const user = await authenticateMobileRequest(req);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const workspace = await getOrCreateMobileWorkspace(user);
-  const wsId = workspace.id;
+  return withMobileAuth(req, async (db, workspace) => {
+    const wsId = workspace.id;
 
   // === Week strip (last 7 days, daily sales + expenses) ===
   const days = weekWindow();
@@ -39,7 +35,15 @@ export async function GET(req: Request) {
   nextMonthStart.setMonth(nextMonthStart.getMonth() + 1);
 
   // Run all queries in parallel — Neon round-trip is the bottleneck.
-  const [weekRows, [monthSales], [monthExpenses], receivables, topCustomerRows, categoryRows] = await Promise.all([
+  const [
+    weekRows,
+    [monthSales],
+    [monthExpenses],
+    receivables,
+    topCustomerRows,
+    categoryRows,
+    expenseCategoryRows,
+  ] = await Promise.all([
     db
       .select({
         kind: facts.kind,
@@ -124,6 +128,23 @@ export async function GET(req: Request) {
         )
       )
       .groupBy(facts.kind),
+    db
+      .select({
+        category: facts.category,
+        totalMmk: sum(facts.amountMmk),
+        count: count(facts.id),
+      })
+      .from(facts)
+      .where(
+        and(
+          eq(facts.workspaceId, wsId),
+          eq(facts.kind, "expense"),
+          gte(facts.occurredAt, monthStart),
+          lt(facts.occurredAt, nextMonthStart)
+        )
+      )
+      .groupBy(facts.category)
+      .orderBy(desc(sum(facts.amountMmk))),
   ]);
 
   // Map rows into day buckets
@@ -162,6 +183,12 @@ export async function GET(req: Request) {
       totalMmk: parseInt(String(r.totalMmk ?? "0"), 10) || 0,
       count: Number(r.count) || 0,
     })),
+    expenseCategories: expenseCategoryRows.map((r) => ({
+      // Null categories fall under "Other" so they still show up.
+      category: r.category ?? "",
+      totalMmk: parseInt(String(r.totalMmk ?? "0"), 10) || 0,
+      count: Number(r.count) || 0,
+    })),
     receivables: receivables.map((r) => ({
       id: r.id,
       description: r.description,
@@ -169,5 +196,6 @@ export async function GET(req: Request) {
       counterparty: r.counterparty,
       occurredAt: r.occurredAt,
     })),
+  });
   });
 }

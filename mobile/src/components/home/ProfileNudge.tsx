@@ -13,7 +13,6 @@ function incomplete(p: BusinessProfile): boolean {
   return (
     !p.productService ||
     !p.businessType ||
-    p.posEnabled === null ||
     p.salesPeriods.length === 0 ||
     Object.keys(p.salesValues).length === 0 ||
     p.monthlyExpensesMmk === null ||

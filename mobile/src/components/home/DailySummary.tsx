@@ -7,6 +7,8 @@ import { my } from "@/i18n/my";
 interface Props {
   todaySalesMmk: number;
   yesterdaySalesMmk: number;
+  weekSalesMmk?: number;
+  monthRevenueMmk?: number;
 }
 
 function deltaLine(today: number, yesterday: number): string {
@@ -17,20 +19,34 @@ function deltaLine(today: number, yesterday: number): string {
   return my.home.deltaSame;
 }
 
-export function DailySummary({ todaySalesMmk, yesterdaySalesMmk }: Props) {
-  const headline =
-    todaySalesMmk > 0 ? my.home.todaySold(formatCurrency(todaySalesMmk)) : my.home.noSalesYet;
-  const delta = todaySalesMmk > 0 ? deltaLine(todaySalesMmk, yesterdaySalesMmk) : "";
+export function DailySummary({ todaySalesMmk, yesterdaySalesMmk, weekSalesMmk = 0, monthRevenueMmk = 0 }: Props) {
+  let headline: string;
+  let sub = "";
+
+  if (todaySalesMmk > 0) {
+    headline = my.home.todaySold(formatCurrency(todaySalesMmk));
+    sub = deltaLine(todaySalesMmk, yesterdaySalesMmk);
+  } else if (weekSalesMmk > 0) {
+    // weekSold / monthContext may be undefined on old bundles — fall back safely
+    headline = my.home.weekSold
+      ? my.home.weekSold(formatCurrency(weekSalesMmk))
+      : `${formatCurrency(weekSalesMmk)} (7 days)`;
+    sub = monthRevenueMmk > 0 && my.home.monthContext
+      ? my.home.monthContext(formatCurrency(monthRevenueMmk))
+      : "";
+  } else if (monthRevenueMmk > 0) {
+    headline = my.home.monthContext
+      ? my.home.monthContext(formatCurrency(monthRevenueMmk))
+      : `${formatCurrency(monthRevenueMmk)} (30 days)`;
+  } else {
+    headline = my.home.noSalesYet;
+  }
 
   return (
     <View style={styles.wrap}>
-      <AppText variant="subhead" color="primary">
-        {headline}
-      </AppText>
-      {delta ? (
-        <AppText variant="caption" color="secondary" style={{ marginTop: spacing.xs }}>
-          {delta}
-        </AppText>
+      <AppText variant="subhead" color="primary">{headline}</AppText>
+      {sub ? (
+        <AppText variant="caption" color="secondary" style={{ marginTop: spacing.xs }}>{sub}</AppText>
       ) : null}
     </View>
   );

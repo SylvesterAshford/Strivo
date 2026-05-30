@@ -31,8 +31,8 @@ export default function PeriodsStep() {
 
   return (
     <WizardStep
-      step={3}
-      totalSteps={11}
+      step={2}
+      totalSteps={10}
       title={my.onboarding.periodsTitle}
       subtitle={my.onboarding.periodsSubtitle}
       ctaLabel={my.common.next}

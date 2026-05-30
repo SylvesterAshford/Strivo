@@ -98,21 +98,42 @@ Rules:
 `;
 }
 
+// ── In-memory cache ──────────────────────────────────────────────────────────
+// Keyed by `${workspaceId}:${normalised scenario}`. Free-tier Gemini quotas
+// are tight; caching identical queries avoids duplicate API calls within one
+// Next.js dev session or lambda instance lifetime.
+const _cache = new Map<string, { result: ScenarioProjection; at: number }>();
+const CACHE_TTL_MS = 30 * 60_000; // 30 min
+
 // ── Entry point ─────────────────────────────────────────────────────────────
 
 export async function runScenario(
   insights: StrategicInsights,
   profile: ProfileInput,
-  scenario: string
+  scenario: string,
+  workspaceId = ""
 ): Promise<ScenarioProjection> {
+  const key = `${workspaceId}:${scenario.trim().toLowerCase()}`;
+  const cached = _cache.get(key);
+  if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
+    return cached.result;
+  }
+
   const llm = getLLM();
-  return llm.structured(buildPrompt(insights, profile, scenario), {
+  const result = await llm.structured(buildPrompt(insights, profile, scenario), {
     schema: ScenarioProjection,
     schemaDescription: SCHEMA_DESC,
     retryOnInvalid: true,
     temperature: 0.4,
-    // Burmese reasoning + output is token-heavy; 4096 truncates mid-JSON.
     maxTokens: 8192,
     workKind: "reasoning",
   });
+
+  _cache.set(key, { result, at: Date.now() });
+  // Evict stale entries so the map doesn't grow unbounded.
+  if (_cache.size > 100) {
+    const cutoff = Date.now() - CACHE_TTL_MS;
+    for (const [k, v] of _cache) if (v.at < cutoff) _cache.delete(k);
+  }
+  return result;
 }

@@ -4,43 +4,50 @@
 
 export const colors = {
   bg: {
-    base: "#F8F4F1", // warm cream, the canvas
+    base: "#F8F5FB", // soft lavender-tinted cream, the canvas
     surface: "#FFFFFF", // cards, raised elements
-    elevated: "#F2EDE9", // subtle inset, week strip
-    iconSoft: "#EDE4ED", // icon containers for attention items (soft plum)
-    iconNeutral: "#F0EAE6", // icon containers for neutral items
-    track: "#EDE4ED", // progress bar tracks
+    elevated: "#F1ECF7", // subtle inset, week strip
+    iconSoft: "#EFE7FB", // icon containers for attention items (soft lavender)
+    iconNeutral: "#F0EAF2", // icon containers for neutral items
+    track: "#EBE3F7", // progress bar tracks
   },
 
   // Gradient stops. RN has no CSS gradients — use expo-linear-gradient with these.
   gradient: {
-    plumPeach: ["#F0E6F0", "#F7E8E0", "#FCEEE0"] as const, // pinned cards, gauge
+    plumPeach: ["#EFE7FB", "#F3EAFB", "#FBEFF7"] as const, // pinned cards, gauge
     plumPeachLocations: [0, 0.5, 1] as const,
-    deepPlum: ["#3A1A4A", "#2D1238"] as const, // dock mic button only
+    deepPlum: ["#7C3AED", "#5B21B6"] as const, // dock mic button only
+    // Brand lavender gradient — primary CTAs. Brand color (#BC8EF6) at top,
+    // deep readable purple at bottom so white text stays legible.
+    brand: ["#BC8EF6", "#7C3AED"] as const,
+    brandPressed: ["#A974EE", "#6D28D9"] as const,
   },
 
   border: {
-    default: "#E8E0DA", // 1px default
+    default: "#E9E2F1", // 1px default
     hairline: "rgba(0,0,0,0.05)",
   },
 
   text: {
-    primary: "#2A1F2D", // deep plum-black, all primary text
-    secondary: "#7A6B7D", // muted plum-brown, labels and metadata
-    tertiary: "#B5A8B8", // axis labels, rank numbers, hints
-    onDark: "#F8F4F1", // cream text on the dark dock mic
+    primary: "#241B33", // deep violet-black, all primary text
+    secondary: "#766B85", // muted violet-grey, labels and metadata
+    tertiary: "#B3A8C2", // axis labels, rank numbers, hints
+    onDark: "#FFFFFF", // white text on filled brand surfaces
   },
 
   accent: {
-    base: "#6B2D7B", // rich plum, the brand color
-    pressed: "#4F1F5C", // plum-pressed
-    soft: "rgba(107, 45, 123, 0.12)", // accent fills, pills, active nav
-    glow: "rgba(107, 45, 123, 0.30)", // shadow under mic only
+    // Brand identity is lavender (#BC8EF6, see `tint`). For text/icons/solids
+    // on white we need contrast, so `base` is a deeper shade of the same hue.
+    base: "#7C3AED", // deep lavender — readable on white for text/icons
+    pressed: "#6D28D9",
+    soft: "rgba(188, 142, 246, 0.16)", // accent fills, pills, active nav
+    glow: "rgba(188, 142, 246, 0.40)", // shadow under mic / brand glow
+    tint: "#BC8EF6", // the exact brand lavender — logo, soft identity uses
   },
 
   // Multi-series chart palette. Keep the accent scarce — charts use these.
   chart: {
-    plum: "#6B2D7B",
+    plum: "#7C3AED",
     dustyRose: "#B85C8E",
     sage: "#5C7B6B",
     terracotta: "#C97755",

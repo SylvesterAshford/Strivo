@@ -37,8 +37,8 @@ export default function SuppliersStep() {
 
   return (
     <WizardStep
-      step={10}
-      totalSteps={11}
+      step={9}
+      totalSteps={10}
       title={my.onboarding.suppliersTitle}
       subtitle={my.onboarding.suppliersSubtitle}
       ctaLabel={my.common.next}

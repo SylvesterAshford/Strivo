@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { SalesPeriod, RivalDetail, ProductSeed, SupplierSeed } from "@/lib/api";
+import type { SalesPeriod, RivalDetail, ProductSeed, SupplierSeed, ExpenseSeed } from "@/lib/api";
 
 // In-progress onboarding state. Each step writes here on Next; the final
 // welcome screen flushes the whole draft to the backend via PUT /profile.
@@ -11,6 +11,7 @@ export interface OnboardingDraft {
   salesPeriods: SalesPeriod[];
   salesValues: Partial<Record<SalesPeriod, number>>;
   monthlyExpensesMmk: number | null;
+  expensesSeed: ExpenseSeed[];
   competitors: string[];
   competitorDetails: RivalDetail[];
   customersSeed: string[];
@@ -32,6 +33,7 @@ const initial: OnboardingDraft = {
   salesPeriods: [],
   salesValues: {},
   monthlyExpensesMmk: null,
+  expensesSeed: [],
   competitors: [],
   competitorDetails: [],
   customersSeed: [],
@@ -48,7 +50,6 @@ export const useOnboarding = create<OnboardingState>((set, get) => ({
     let n = 0;
     if (s.businessName.trim()) n++;
     if (s.productService.trim()) n++;
-    if (s.posEnabled !== null) n++;
     if (s.salesPeriods.length > 0) n++;
     if (Object.keys(s.salesValues).length > 0) n++;
     if (s.monthlyExpensesMmk !== null) n++;
