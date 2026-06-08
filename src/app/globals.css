@@ -1,26 +1,241 @@
 @import "tailwindcss";
 
+/* ── Slate / Ink base ──────────────────────────────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg-base: #f8fafc;
+  --bg-surface: #ffffff;
+  --text-primary: #0f172a;
+  --border-default: #e5e7eb;
+  --content-max: 1040px; /* centered content column on wide screens */
+  --feed-max: 600px; /* narrower column for single-stream pages (home) */
+  --sidebar-w: 248px; /* desktop left nav */
+  --desktop: 1024px; /* breakpoint: sidebar appears, dock hides */
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  box-sizing: border-box;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-inter), var(--font-myanmar), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior-y: none;
+}
+
+/* Full-bleed responsive frame — uses the whole viewport. */
+#app-frame {
+  width: 100%;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-base);
+  position: relative;
+}
+
+/* ── App shell (the (tabs) area): dock on mobile, sidebar on desktop ───────── */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 100dvh;
+}
+.app-sidebar {
+  display: none;
+}
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+@media (min-width: 1024px) {
+  .app-shell {
+    flex-direction: row;
+  }
+  .app-sidebar {
+    display: flex;
+    flex-direction: column;
+    width: var(--sidebar-w);
+    flex: none;
+    height: 100dvh;
+    position: sticky;
+    top: 0;
+    border-right: 1px solid var(--border-default);
+    background: var(--bg-surface);
+  }
+  /* The fixed mobile dock is hidden on desktop (display:none cascades). */
+  .app-dock {
+    display: none;
+  }
+}
+
+/* ── Screen scaffolding (centered, responsive content) ─────────────────────── */
+.screen-scroll {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--bg-base);
+}
+.screen-content {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--content-max);
+  margin-inline: auto;
+  padding: 20px 20px 104px; /* bottom clears the mobile dock */
+}
+.screen-fill {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--content-max);
+  margin-inline: auto;
+  padding: 20px 20px 104px;
+}
+@media (min-width: 1024px) {
+  .screen-content,
+  .screen-fill {
+    padding: 36px 40px 48px; /* no dock to clear on desktop */
+  }
+}
+
+/* Responsive card grid — 1 col on mobile, fills width on desktop. */
+.card-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  align-items: start;
+}
+@media (min-width: 768px) {
+  .card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Home dashboard KPI row — auto-fits 1→3 across as width allows. */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+/* Center stack/detail screens (record, imports, etc.) on wide screens. */
+.stack-center {
+  width: 100%;
+  max-width: 760px;
+  margin-inline: auto;
+}
+
+/* RN TextInput placeholder colour bridge (set via --rn-placeholder inline). */
+.rn-input::placeholder {
+  color: var(--rn-placeholder, #94a3b8);
+  opacity: 1;
+}
+
+/* ActivityIndicator spin. */
+@keyframes rn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.rn-spinner {
+  animation: rn-spin 0.7s linear infinite;
+}
+
+/* ── Premium motion ────────────────────────────────────────────────────────
+   Restrained, fast, purposeful — entrance + hierarchy, not decoration. */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes bar-grow {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@keyframes shimmer {
+  to {
+    background-position: 200% 0;
+  }
+}
+
+/* Screen content fades up on mount. */
+.screen-content,
+.screen-fill {
+  animation: fade-in-up 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Chart bars/columns grow from their baseline. Set transform-origin:bottom on
+   the element and add this class. */
+.bar-enter {
+  animation: bar-grow 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform-origin: bottom;
+}
+
+/* Card hover-lift — premium tactile feedback on interactive cards. */
+.lift {
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+@media (hover: hover) {
+  .lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
+  }
+}
+
+/* Skeleton shimmer surface. */
+.skeleton {
+  background: linear-gradient(90deg, #eef1f5 25%, #f6f8fa 37%, #eef1f5 63%);
+  background-size: 200% 100%;
+  animation: shimmer 1.3s ease-in-out infinite;
+  border-radius: 10px;
+}
+
+/* Keyboard focus rings — visible, accessible, on-brand. */
+:focus-visible {
+  outline: 2px solid #1e293b;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Respect reduced-motion: kill entrance/decorative animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  .screen-content,
+  .screen-fill,
+  .bar-enter,
+  .lift {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Hide scrollbars (the mobile app hid scroll indicators). */
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+* {
+  scrollbar-width: none;
 }

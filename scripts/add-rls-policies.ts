@@ -18,6 +18,7 @@ import { sql } from "drizzle-orm";
 const TABLES = [
   // workspace-scoped business data
   "facts",
+  "advisor_action_events",
   "voice_recordings",
   "workspaces",
   // unused founder tables — still lock down so any future regression is contained
@@ -91,7 +92,7 @@ async function main() {
   `);
 
   // ── tables with a direct workspace_id column ─────────────────────────
-  for (const t of ["facts", "voice_recordings", "materials", "entities", "edges", "branches", "simulations"]) {
+  for (const t of ["facts", "advisor_action_events", "voice_recordings", "materials", "entities", "edges", "branches", "simulations"]) {
     const policy = `${t}_isolation`;
     await drop(policy, t);
     await db.execute(sql.raw(`

@@ -418,6 +418,29 @@ export const facts = pgTable(
   })
 );
 
+// Advisor action feedback (the "action loop"). One row each time the owner marks
+// a recommended action done or skipped. `actionKey` is a STABLE key (not the
+// localized title) so act-rate can be aggregated by advice type across months.
+// `periodMonth` records which month the action was shown for (YYYY-MM), so we can
+// ask "did they act on last month's expense advice". RLS-scoped like facts
+// (see scripts/add-rls-policies.ts).
+export const advisorActionEvents = pgTable(
+  "advisor_action_events",
+  {
+    id: text("id").primaryKey(), // `aae_<cuid2>`
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    actionKey: text("action_key").notNull(), // stable ActionKey (src/lib/advisor/monthly.ts)
+    status: text("status").notNull().$type<"done" | "skip">(),
+    periodMonth: text("period_month"), // YYYY-MM the action was shown for
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    workspaceIdx: index("aae_workspace_idx").on(t.workspaceId),
+  })
+);
+
 // === RELATIONS ===
 
 export const usersRelations = relations(users, ({ many }) => ({

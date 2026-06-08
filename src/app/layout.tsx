@@ -1,19 +1,42 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { Inter, Instrument_Serif, JetBrains_Mono, Noto_Sans_Myanmar, Space_Grotesk } from "next/font/google";
 import "./globals.css";
+import { Providers } from "@/components/app/Providers";
+
+// Type scale fonts (design.md 5). Exposed as CSS variables consumed by the
+// font stacks in src/rn (each stack falls back to Noto Sans Myanmar so Burmese
+// renders without tofu).
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
+const serif = Instrument_Serif({ subsets: ["latin"], weight: "400", style: ["normal", "italic"], variable: "--font-serif", display: "swap" });
+const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono", display: "swap" });
+const grotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-grotesk", display: "swap" });
+const myanmar = Noto_Sans_Myanmar({ subsets: ["myanmar"], weight: ["400", "500"], variable: "--font-myanmar", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Strivo API",
-  description: "Mobile backend for the Strivo Expo app.",
+  title: "Strivo — AI business assistant",
+  description: "Burmese-first AI business assistant for Myanmar MSMEs. Log sales and expenses, get financial reports and AI insights.",
+  icons: { icon: "/favicon.png" },
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export const viewport: Viewport = {
+  themeColor: "#F8F5FB",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: "cover",
+};
+
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className="h-full antialiased">
-      <body className="min-h-full">{children}</body>
+    <html
+      lang="en"
+      className={`${inter.variable} ${serif.variable} ${mono.variable} ${grotesk.variable} ${myanmar.variable}`}
+    >
+      <body>
+        <Providers>
+          <div id="app-frame">{children}</div>
+        </Providers>
+      </body>
     </html>
   );
 }

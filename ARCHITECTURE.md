@@ -8,21 +8,29 @@
 
 ## 1. High-Level Overview
 
-Strivo is a **two-part system**:
+Strivo is a **single Next.js app** that serves both the responsive web UI and its API:
 
-1. **Mobile app** (Expo / React Native) — what the shop owner uses.
-2. **Backend API** (Next.js) — auth, data, and AI orchestration.
+1. **Web app** (Next.js App Router + React DOM) — the responsive, Burmese-first
+   interface a shop owner uses. Mobile-first: a centered phone-width column on
+   desktop, full-bleed on phones.
+2. **API** (Next.js Route Handlers under `/api/mobile/v1/*`) — auth, data, and AI
+   orchestration, served same-origin to the web app.
 
 Plus three managed cloud services: **Supabase** (auth + edge functions), **Neon** (Postgres), and **Google Gemini** (LLM).
 
+> The UI began as an Expo / React Native app and was ported to plain web via a
+> small React-Native-compatibility layer (`src/rn/`) that renders real DOM nodes
+> (View→div, Text→span, StyleSheet→inline CSS, LinearGradient→CSS gradients).
+> No react-native-web — the runtime is 100% React DOM.
+
 ```
 ┌─────────────────────┐         ┌──────────────────────────┐
-│   Mobile App         │  HTTPS  │   Next.js Backend         │
-│   (Expo / RN)        │ ──────▶ │   (mobile API routes)     │
-│                      │ ◀────── │                           │
+│   Web App            │  fetch  │   API Route Handlers      │
+│   (Next.js + DOM)    │ ──────▶ │   (/api/mobile/v1/*)      │
+│   src/rn compat layer│ ◀────── │   same origin             │
 │  • Zustand (client)  │  JSON   │  • Drizzle ORM            │
 │  • React Query (srv) │         │  • Zod validation         │
-│  • expo-router       │         │  • LLM orchestration      │
+│  • next/navigation   │         │  • LLM orchestration      │
 └─────────┬───────────┘         └──────┬──────────┬─────────┘
           │                            │          │
           │ Supabase Auth SDK          │          │ Gemini calls
@@ -43,31 +51,28 @@ Plus three managed cloud services: **Supabase** (auth + edge functions), **Neon*
 
 ## 2. Tech Stack
 
-### Mobile App (`/mobile`)
+### Web App (`src/app`, `src/components`, `src/rn`)
 
 | Layer | Technology | Version | Purpose |
 |---|---|---|---|
-| Framework | **Expo** | SDK 56 | React Native tooling, OTA, builds |
-| Runtime | **React Native** | 0.85.3 | Native iOS/Android UI |
-| UI | **React** | 19 | Component model |
-| Navigation | **expo-router** | 56 | File-based routing, tabs + stacks |
-| Client state | **Zustand** | 5 | Onboarding draft, profile flags |
+| Framework | **Next.js** | 16 | App Router (frontend + API), Turbopack |
+| Runtime | **React** (DOM) | 19 | Component model, client components |
+| RN compat | **`src/rn/`** (in-house) | — | View/Text/Pressable/StyleSheet/LinearGradient → DOM; expo-router & expo-* shims |
+| Navigation | **next/navigation** | (Next 16) | App-Router routing; `src/rn/router` maps the old expo-router API onto it |
+| Client state | **Zustand** | 5 | Onboarding draft, profile flags (persisted to localStorage) |
 | Server state | **TanStack React Query** | 5 | Data fetching, caching, invalidation |
-| Auth client | **@supabase/supabase-js** | 2 | Google OAuth + email/password |
-| Animation | **react-native-reanimated** | 4 | Gestures, transitions |
-| Gestures | **react-native-gesture-handler** | 2 | Swipe-to-delete, dock |
-| Icons | **@tabler/icons-react-native** | 3 | Outline icon set |
-| Fonts | Inter, Instrument Serif, JetBrains Mono, **Noto Sans Myanmar** | — | Burmese + Latin type |
-| Files | **expo-document-picker**, **expo-file-system**, **expo-sharing** | 56 | Excel/PDF upload, data export |
-| Spreadsheet | **xlsx** (SheetJS) | 0.18 | Client-side Excel parse preview |
-| Secure storage | **expo-secure-store** | 56 | Session token persistence |
+| Auth client | **@supabase/supabase-js** | 2 | Google OAuth + email/password (browser, localStorage session) |
+| Icons | **lucide-react** | — | Outline icon set (+ inline Google mark) |
+| Fonts | **next/font**: Inter, Instrument Serif, JetBrains Mono, **Noto Sans Myanmar** | — | Burmese + Latin type, self-hosted, CSS-variable stacks |
+| Files | hidden `<input type=file>` + object URLs (`src/rn/expo`) | — | Excel/PDF upload, JSON export download |
+| Spreadsheet | **xlsx** (SheetJS) | 0.18 | Server-side Excel parse |
 
-### Backend (`/` root — Next.js)
+### Backend (`src/app/api`, `src/db`, `src/lib`)
 
 | Layer | Technology | Version | Purpose |
 |---|---|---|---|
-| Framework | **Next.js** | 16.2.6 | API routes (App Router), Turbopack |
-| Runtime | **React** | 19 | (server components, minimal UI) |
+| Framework | **Next.js** | 16.2.6 | Route Handlers (App Router), Turbopack |
+| Runtime | **React** | 19 | Server components |
 | ORM | **Drizzle ORM** | 0.45 | Type-safe SQL, migrations |
 | DB driver | **postgres** (postgres.js) | 3.4 | Neon connection |
 | Validation | **Zod** | 4 | Request body + LLM output schemas |
@@ -99,7 +104,7 @@ users (id = Supabase auth uid, email)
 ```
 
 **Active tables:** `users`, `workspaces`, `facts`, `voice_recordings`.
-*(The schema also carries dormant "founder graph" tables — `entities`, `edges`, `mentions`, `branches`, `commits`, `simulations`, `agents`, `materials` — not used by the mobile product.)*
+*(The schema also carries dormant "founder graph" tables — `entities`, `edges`, `mentions`, `branches`, `commits`, `simulations`, `agents`, `materials` — not used by the Strivo product.)*
 
 Key columns on `facts`:
 - `kind` — drives all home/report aggregation
@@ -111,17 +116,17 @@ Key columns on `facts`:
 ### 3.2 Auth flow
 
 ```
-1. Mobile: supabase.auth.signInWithOAuth / signInWithPassword
-2. Supabase issues a JWT, persisted in expo-secure-store
-3. Mobile: POST /api/mobile/v1/auth/sync with Bearer JWT
+1. Web: supabase.auth.signInWithOAuth (full-page Google redirect) / signInWithPassword
+2. Supabase issues a JWT, persisted in localStorage; detectSessionInUrl finishes OAuth
+3. Web: POST /api/mobile/v1/auth/sync with Bearer JWT (same origin)
 4. Backend verifies JWT, getOrCreateMobileWorkspace(user)
 5. Returns { workspace, onboarded } — onboarded=true if profile fields exist
-6. Mobile hydrates Zustand + prefetches home/profile, then routes:
+6. Web hydrates Zustand + prefetches home/profile, then the AuthGate routes:
      onboarded=false → onboarding wizard (10 steps)
      onboarded=true  → app tabs
 ```
 
-Session persistence means a returning user skips login; the `onboarded` flag decides wizard vs. app. A loading screen gates the transition while auth resolves and tab data prefetches.
+Session persistence means a returning user skips login; the `onboarded` flag decides wizard vs. app. `src/components/app/AuthGate.tsx` is the client-side route guard (the web equivalent of the old expo-router root navigator) and shows a loading screen while auth resolves and tab data prefetches. `*_AUTH_BYPASS=true` short-circuits the guard with a stub dev user for local work.
 
 ### 3.3 Data ingestion (3 paths)
 
@@ -163,21 +168,25 @@ Backend route  ──▶  getLLM() → GeminiProvider
 - `/insights` — full strategic report (growth/market scores, SWOT, segments, recommendations)
 - `/insights/scenario` — what-if projection grounded in the cached report
 
-### 3.5 Mobile navigation structure
+### 3.5 Navigation structure (Next App Router)
 
 ```
-(auth)                 → login screen (Strivo brand, Google + email)
-(onboarding)           → 10-step wizard (name, type, sales, expenses, competitors, …)
-(app)                  → Stack
-  ├─ (tabs)            → Tabs + FloatingDock
-  │    ├─ index        → Home (hero metric, daily summary, recent entries)
-  │    ├─ reports      → Financial report (P&L, category + expense breakdown)
-  │    ├─ analytics    → AI insights (trend, SWOT, segments, scenarios)
-  │    └─ profile      → Business profile + data import + account
-  └─ detail screens    → record (add-data hub), manual-entry, import-*, business-profile, confirm-facts
+/login                 → login screen (Strivo brand, Google + email)
+/onboarding[/...]      → 10-step wizard (name, type, sales, expenses, competitors, …)
+(tabs) group           → shares the FloatingDock chrome
+  ├─ /                 → Home (hero metric, daily summary, recent entries)
+  ├─ /reports          → Financial report (P&L, category + expense breakdown)
+  ├─ /analytics        → AI insights overview
+  │    └─ /analytics/{trend,swot,segments,scenarios,recommendations}
+  └─ /profile          → Business profile + data import + account
+detail routes (no dock)→ /record (add-data hub), /manual-entry, /import-{sales,expenses,products},
+                         /business-profile, /confirm-facts
 ```
 
-Detail screens push **over** the tabs (so back returns to the originating tab); the FloatingDock's center "+" opens the Add-data hub.
+The `(tabs)` route-group layout renders the FloatingDock; the analytics detail
+screens live under it but use their own back header. Stack-style detail routes sit
+outside the group so they render without the dock. The dock's center "+" opens the
+Add-data hub (`/record`).
 
 ---
 
@@ -197,20 +206,21 @@ Detail screens push **over** the tabs (so back returns to the originating tab); 
 
 ## 5. Environments & Config
 
-**Backend (`.env.local`):**
+**Server (`.env.local`):**
 ```
 DATABASE_URL / DATABASE_URL_OWNER   # Neon connection
 SUPABASE_URL / SUPABASE_ANON_KEY    # JWT verify + proxy auth
 SUPABASE_SERVICE_ROLE_KEY           # admin (account delete, seeding)
+AUTH_BYPASS                         # skip JWT validation in dev (false in prod)
 GEMINI_API_KEY                      # caller-key fallback
 GEMINI_PROXY_URL                    # Supabase edge function URL
 ```
 
-**Mobile (`mobile/.env`):**
+**Browser (same `.env.local`, exposed via `NEXT_PUBLIC_`):**
 ```
-EXPO_PUBLIC_SUPABASE_URL / _ANON_KEY
-EXPO_PUBLIC_API_BASE_URL            # backend base (LAN IP in dev)
-EXPO_PUBLIC_AUTH_BYPASS             # dev shortcut (false in prod)
+NEXT_PUBLIC_SUPABASE_URL / _ANON_KEY   # browser Supabase client
+NEXT_PUBLIC_AUTH_BYPASS                # skip login + onboarding gate (false in prod)
+NEXT_PUBLIC_APP_URL                    # OAuth redirect origin
 ```
 
 **Edge function secrets:**
@@ -232,4 +242,4 @@ GEMINI_API_KEYS                     # comma-separated, rotated
 
 ---
 
-*Stack verified against `package.json`, `mobile/package.json`, `src/db/schema.ts`, and the mobile API routes as of this writing.*
+*Stack verified against `package.json`, `src/db/schema.ts`, and the API routes as of this writing.*
