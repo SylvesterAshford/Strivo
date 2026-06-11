@@ -2,9 +2,9 @@
 
 import { View, StyleSheet } from "@/rn";
 import { AppText } from "@/components/ui/AppText";
-import { Eyebrow } from "@/components/ui/Eyebrow";
 import { colors, spacing, radius } from "@/theme/tokens";
 import { formatCurrency } from "@/lib/format";
+import { my } from "@/i18n/my";
 import type { ReportsData } from "@/lib/api";
 
 type Receivable = ReportsData["receivables"][number];
@@ -50,7 +50,7 @@ export function ReceivablesList({ receivables }: Props) {
   return (
     <View style={styles.card}>
       <View style={styles.header}>
-        <Eyebrow>OUTSTANDING</Eyebrow>
+        <AppText variant="title">{my.reports.outstandingTitle}</AppText>
         <AppText variant="bodyMedium" style={{ color: colors.semantic.caution }}>
           {formatCurrency(totalMmk)}
         </AppText>

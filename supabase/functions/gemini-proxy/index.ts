@@ -24,6 +24,35 @@
 
 const GEMINI_HOST = "https://generativelanguage.googleapis.com";
 
+// ── Best-effort concurrency cap ───────────────────────────────────────────────
+// Smooths import bursts against the free-tier 15 RPM cap. BEST-EFFORT by
+// design: Supabase runs isolates per worker with no guaranteed shared state,
+// so this caps each worker, not the function globally. Numbers are starting
+// estimates (15 RPM / ~1.5s avg call) — tune after observing proxy logs.
+// Past the queue depth we return 429 immediately; the app's client-side
+// exponential backoff + jitter absorbs it.
+const MAX_CONCURRENT = 10;
+const MAX_WAITING = 40; // in-flight + queued ≈ 50 before we shed load
+
+let active = 0;
+const waiters: Array<() => void> = [];
+
+async function acquireSlot(): Promise<boolean> {
+  if (active < MAX_CONCURRENT) {
+    active++;
+    return true;
+  }
+  if (waiters.length >= MAX_WAITING) return false;
+  await new Promise<void>((resolve) => waiters.push(resolve));
+  active++;
+  return true;
+}
+
+function releaseSlot(): void {
+  active--;
+  waiters.shift()?.();
+}
+
 // Load keys once at boot. Each Deno instance gets its own rotation counter.
 const KEYS: string[] = (
   Deno.env.get("GEMINI_API_KEYS") ??
@@ -57,19 +86,24 @@ function isKeyError(status: number, bodyText: string): boolean {
 }
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: cors() });
+  }
+  if (!(await acquireSlot())) {
+    // Queue full — shed load. Retryable: the caller's backoff handles it.
+    return jsonError(429, "Proxy at capacity, retry shortly.");
+  }
   try {
     return await handle(req);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return jsonError(500, `Edge handler crashed: ${message}`);
+  } finally {
+    releaseSlot();
   }
 });
 
 async function handle(req: Request): Promise<Response> {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: cors() });
-  }
-
   // Extract everything after `/gemini-proxy` to forward verbatim.
   const url = new URL(req.url);
   const idx = url.pathname.indexOf("/gemini-proxy");

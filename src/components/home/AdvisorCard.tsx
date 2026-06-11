@@ -7,24 +7,15 @@ import { Eyebrow } from "@/components/ui/Eyebrow";
 import { SerifMetric } from "@/components/ui/SerifMetric";
 import { Icon } from "@/components/ui/Icon";
 import { colors, spacing, radius } from "@/theme/tokens";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatCurrencyParts, formatPeriodMonth } from "@/lib/format";
 import { useCountUp } from "@/lib/use-count-up";
 import type { AdvisorHome, BusinessHealthStatus } from "@/lib/api";
-
-const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
 const STATUS_COLOR: Record<BusinessHealthStatus, string> = {
   good: colors.semantic.positive,
   watch: colors.semantic.caution,
   at_risk: colors.semantic.critical,
 };
-
-// "2026-05" → "MAY 2026" for the mono eyebrow.
-function monthLabel(periodMonth: string): string {
-  const [y, m] = periodMonth.split("-");
-  const idx = Math.max(0, Math.min(11, parseInt(m, 10) - 1));
-  return `${MONTHS[idx]} ${y}`;
-}
 
 // The Monthly Profit Review card — the new Home centerpiece. Health status,
 // profit snapshot for the reviewed month, and the deterministic "why it changed".
@@ -48,7 +39,7 @@ export function AdvisorCard({ advisor }: { advisor: AdvisorHome }) {
     >
       {/* Period + update CTA */}
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-        <Eyebrow>{monthLabel(advisor.periodMonth)}</Eyebrow>
+        <Eyebrow>{formatPeriodMonth(advisor.periodMonth)}</Eyebrow>
         <Pressable
           onPress={() => router.push("/record")}
           style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
@@ -84,13 +75,20 @@ export function AdvisorCard({ advisor }: { advisor: AdvisorHome }) {
         }}
       >
         <Eyebrow>အမြတ်</Eyebrow>
-        <SerifMetric value={formatCurrency(Math.round(animatedProfit), { withUnit: false })} unit="MMK" size="display" />
-        <View style={{ flexDirection: "row", gap: spacing["3xl"], marginTop: spacing.sm }}>
+        <SerifMetric
+          value={formatCurrencyParts(Math.round(animatedProfit)).value}
+          unit={formatCurrencyParts(Math.round(animatedProfit)).unit}
+          size="display"
+        />
+        {/* lineHeight pinned on both values: Burmese units (သိန်း) get a taller
+            fallback-font line box than Latin "Ks", which drifts the baselines
+            between columns without an explicit shared height. */}
+        <View style={{ flexDirection: "row", alignItems: "flex-end", gap: spacing["3xl"], marginTop: spacing.sm }}>
           <View>
             <AppText variant="caption" color="tertiary">
               ရောင်းအား
             </AppText>
-            <AppText variant="bodyMedium" color="primary">
+            <AppText variant="bodyMedium" color="primary" style={{ lineHeight: 24 }}>
               {formatCurrency(advisor.snapshot.salesMmk)}
             </AppText>
           </View>
@@ -98,7 +96,13 @@ export function AdvisorCard({ advisor }: { advisor: AdvisorHome }) {
             <AppText variant="caption" color="tertiary">
               ကုန်ကျ
             </AppText>
-            <AppText variant="bodyMedium" style={{ color: profitColor === colors.semantic.critical ? colors.semantic.critical : colors.text.primary }}>
+            <AppText
+              variant="bodyMedium"
+              style={{
+                lineHeight: 24,
+                color: profitColor === colors.semantic.critical ? colors.semantic.critical : colors.text.primary,
+              }}
+            >
               {formatCurrency(advisor.snapshot.expensesMmk)}
             </AppText>
           </View>

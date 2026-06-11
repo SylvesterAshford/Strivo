@@ -1,4 +1,5 @@
 import type { LLMError } from "./types";
+import { captureError } from "@/lib/observability";
 
 export class LLMProviderError extends Error implements LLMError {
   readonly kind: LLMError["kind"];
@@ -16,6 +17,12 @@ export class LLMProviderError extends Error implements LLMError {
     this.kind = params.kind;
     this.provider = params.provider;
     this.retryable = params.retryable ?? false;
+    // Single funnel for every getLLM() failure: constructed only after the
+    // provider's retry budget is exhausted, so each instance is a real
+    // user-visible failure. Several call sites swallow these (e.g. column
+    // detection falls back to manual mapping) — capturing here keeps the
+    // swallowed ones observable. Message carries no prompt content.
+    captureError(this, { source: "llm", provider: params.provider, kind: params.kind });
   }
 }
 

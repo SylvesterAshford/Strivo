@@ -76,24 +76,44 @@ export interface AdvisorHome {
 }
 
 // ── Month-window helpers (single source of truth — see CQ1) ────────────────────
+//
+// Months align to MYANMAR TIME (UTC+6:30), not UTC, because the owner thinks in
+// their own calendar month. A `start`/`end` returned here is a UTC *instant* that
+// corresponds to MMT-wall-clock midnight on the 1st. The whole advisor and the
+// Reports route resolve their window through these helpers, so the two screens
+// agree on "this month" by construction (see period.ts / strivo-screen-logic.md).
+//
+//   instant d ──(+6:30)──▶ MMT wall clock ──▶ pick its month ──▶ month start/end
+//                                                                 as UTC instants
+// MMT has no DST, so a fixed +6:30 offset is exact.
 
-/** Start of the month containing `d`, and start of the next month. UTC. */
+const MMT_OFFSET_MS = (6 * 60 + 30) * 60 * 1000; // UTC+6:30, no DST
+
+/**
+ * The MMT month containing instant `d`: start = MMT-midnight on the 1st, end =
+ * MMT-midnight on the 1st of next month, both as UTC instants.
+ */
 export function monthBounds(d: Date): { start: Date; end: Date } {
-  const start = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
-  const end = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
+  // Shift into MMT wall-clock so getUTC* reads the local month, then shift the
+  // resulting wall-clock month starts back to true UTC instants.
+  const shifted = new Date(d.getTime() + MMT_OFFSET_MS);
+  const y = shifted.getUTCFullYear();
+  const m = shifted.getUTCMonth();
+  const start = new Date(Date.UTC(y, m, 1) - MMT_OFFSET_MS);
+  const end = new Date(Date.UTC(y, m + 1, 1) - MMT_OFFSET_MS);
   return { start, end };
 }
 
-/** The month immediately before the given month bounds. Handles Dec→Jan. */
+/** The MMT month immediately before the given month bounds. Handles Dec→Jan. */
 export function priorMonthBounds(bounds: { start: Date }): { start: Date; end: Date } {
-  const s = bounds.start;
-  const start = new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth() - 1, 1));
-  return { start, end: s };
+  // One ms before this month's start lands inside the prior MMT month.
+  return monthBounds(new Date(bounds.start.getTime() - 1));
 }
 
-/** YYYY-MM for a date (UTC). */
+/** YYYY-MM for instant `d`, in MMT. */
 export function ym(d: Date): string {
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  const shifted = new Date(d.getTime() + MMT_OFFSET_MS);
+  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
 // ── Burmese copy ───────────────────────────────────────────────────────────────

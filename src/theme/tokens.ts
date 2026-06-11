@@ -48,6 +48,15 @@ export const colors = {
     tint: "#334155", // soft identity uses (logo wordmark, etc.)
   },
 
+  // Brand identity accent — the logo's violet. Used ONLY for identity +
+  // interactive states (wordmark, active nav, focus outlines), never for the
+  // slate theme surfaces or the black/white button fills.
+  identity: {
+    purple: "#7C3AED", // logo violet — icon + text on active states
+    soft: "rgba(124,58,237,0.10)", // soft fill behind active items
+    border: "rgba(124,58,237,0.32)", // liquid-glass outline
+  },
+
   // Multi-series chart palette — muted but distinct, professional.
   chart: {
     plum: "#475569", // primary slate-blue series

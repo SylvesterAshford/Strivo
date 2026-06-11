@@ -2,7 +2,6 @@
 
 import { View, StyleSheet } from "@/rn";
 import { AppText } from "@/components/ui/AppText";
-import { Eyebrow } from "@/components/ui/Eyebrow";
 import { colors, spacing, radius } from "@/theme/tokens";
 import { formatCurrency } from "@/lib/format";
 import { my } from "@/i18n/my";
@@ -18,8 +17,9 @@ export function TopCustomers({ customers }: Props) {
 
   return (
     <View style={styles.card}>
-      <Eyebrow style={{ marginBottom: spacing.lg }}>TOP CUSTOMERS</Eyebrow>
-      <AppText variant="title" style={{ marginBottom: spacing.md }}>
+      {/* One heading per card — the Burmese title IS the heading (English
+          mono eyebrows double-headed every card and added noise). */}
+      <AppText variant="title" style={{ marginBottom: spacing.lg }}>
         {my.reports.topCustomers}
       </AppText>
       <View style={{ gap: spacing.md }}>

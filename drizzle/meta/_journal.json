@@ -22,13 +22,6 @@
       "when": 1748304000000,
       "tag": "0002_voice_and_facts",
       "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1780924440102,
-      "tag": "0003_goofy_wendell_rand",
-      "breakpoints": true
     }
   ]
 }

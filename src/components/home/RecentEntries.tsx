@@ -21,9 +21,12 @@ const KIND_META: Record<
 };
 
 function DeleteAction({ onDelete }: { onDelete: () => void }) {
+  // Calm trailing control, not a red wall. Muted ✕; the row's hover tint
+  // (.entry-delete:hover in globals.css) signals it deletes. A confirm guards
+  // accidental taps since web has no swipe-to-undo gesture.
   return (
-    <Pressable onPress={onDelete} style={styles.deleteAction}>
-      <Icon name="x" size={18} color="#fff" />
+    <Pressable onPress={onDelete} style={styles.deleteAction} className="entry-delete" accessibilityLabel="ဖျက်ရန်">
+      <Icon name="x" size={15} color={colors.text.tertiary} />
     </Pressable>
   );
 }
@@ -32,6 +35,7 @@ function EntryRow({ entry, onDeleted }: { entry: RecentEntry; onDeleted: () => v
   const meta = KIND_META[entry.kind];
 
   const handleDelete = async () => {
+    if (typeof window !== "undefined" && !window.confirm("ဤမှတ်တမ်းကို ဖျက်မလား?")) return;
     await deleteFact(entry.id);
     onDeleted();
   };
@@ -83,7 +87,7 @@ export function RecentEntries({ entries, label = "TODAY" }: { entries: RecentEnt
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: spacing["2xl"],
+    marginTop: spacing.xl,
   },
   list: {
     backgroundColor: colors.bg.surface,
@@ -96,13 +100,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     gap: spacing.md,
     backgroundColor: colors.bg.surface,
   },
   iconBox: {
-    width: 32,
-    height: 32,
+    width: 28,
+    height: 28,
     borderRadius: radius.iconContainer,
     alignItems: "center",
     justifyContent: "center",
@@ -117,12 +121,13 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: colors.border.hairline,
-    marginLeft: spacing.lg + 32 + spacing.md,
+    marginLeft: spacing.lg + 28 + spacing.md,
   },
+  // Calm, narrow tap target — no fill. The hover tint lives in globals.css.
   deleteAction: {
-    width: 64,
-    backgroundColor: colors.semantic.critical,
+    width: 40,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
 });

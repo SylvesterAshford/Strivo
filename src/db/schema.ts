@@ -48,13 +48,16 @@ export const workspaces = pgTable(
     monthlyExpensesMmk: integer("monthly_expenses_mmk"),
     competitorDetails: jsonb("competitor_details").$type<{ name: string; tier: "discount" | "matcher" | "premium"; audience: string }[]>().default([]),
     // Day-1 seeds so AI insights know the customer/product/supplier universe
-    // before the daily voice/manual stream starts producing facts.
+    // before the manual/import stream starts producing facts.
     customersSeed: jsonb("customers_seed").$type<string[]>().default([]),
     productsSeed: jsonb("products_seed").$type<{ name: string; priceMmk?: number }[]>().default([]),
     suppliersSeed: jsonb("suppliers_seed").$type<{ name: string; supplies?: string }[]>().default([]),
     // Recurring expense categories captured during onboarding. Each entry feeds
     // the manual-entry category quick-pick and the Reports expense breakdown.
     expensesSeed: jsonb("expenses_seed").$type<{ category: string; monthlyMmk?: number }[]>().default([]),
+    // Shop photo / logo as a small (≤256px) JPEG data URL — in-DB by design at
+    // pilot scale (decided 2026-06-11); revisit object storage past ~10K users.
+    avatarUrl: text("avatar_url"),
     branchesStatus: text("branches_status")
       .$type<"idle" | "generating" | "complete" | "failed">()
       .default("idle"),
@@ -362,24 +365,32 @@ export const agentMessages = pgTable(
   })
 );
 
-// === VOICE RECORDINGS & FACTS (Phase 2 — mobile voice input) ===
+// === IMPORT BATCHES (one row per upload event — powers history + undo) ===
+// Deleting a batch CASCADE-deletes its facts: that's the user-facing "undo
+// this import". fileName is null for free-text imports.
 
-export const voiceRecordings = pgTable(
-  "voice_recordings",
+export const importBatches = pgTable(
+  "import_batches",
   {
-    id: text("id").primaryKey(), // `vrec_<cuid2>`
+    id: text("id").primaryKey(), // `imp_<cuid2>`
     workspaceId: text("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    durationSecs: integer("duration_secs"),
-    transcript: text("transcript"),
-    transcribedAt: timestamp("transcribed_at"),
-    recordedAt: timestamp("recorded_at").defaultNow().notNull(),
+    source: text("source")
+      .notNull()
+      .$type<"sales-excel" | "expenses-excel" | "sales-text" | "expenses-text">(),
+    fileName: text("file_name"),
+    rowCount: integer("row_count").notNull(),
+    insertedCount: integer("inserted_count").notNull(),
+    skippedCount: integer("skipped_count").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => ({
-    workspaceIdx: index("voice_recording_workspace_idx").on(t.workspaceId),
+    workspaceIdx: index("import_batch_workspace_idx").on(t.workspaceId),
   })
 );
+
+// === FACTS (the financial ledger — sales / expenses / receivables / notes) ===
 
 export const facts = pgTable(
   "facts",
@@ -388,8 +399,9 @@ export const facts = pgTable(
     workspaceId: text("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    recordingId: text("recording_id").references(() => voiceRecordings.id, {
-      onDelete: "set null",
+    // Set for imported facts; deleting the batch deletes them (import undo).
+    batchId: text("batch_id").references(() => importBatches.id, {
+      onDelete: "cascade",
     }),
     kind: text("kind")
       .notNull()
@@ -401,7 +413,22 @@ export const facts = pgTable(
     // Optional on sale/receivable/note. Populated by manual entry, import flows,
     // and the LLM extractor for free-text expense rows.
     category: text("category"),
+    // Structured product enrichment on sale facts (CEO plan 2026-06-11):
+    // free-text "iPhone X × 2" in description can't answer "what sells best?".
+    // All optional; description stays the human-readable display string.
+    productName: text("product_name"),
+    quantity: integer("quantity"),
+    unitPriceMmk: integer("unit_price_mmk"),
     occurredAt: timestamp("occurred_at").defaultNow().notNull(),
+    // Whether occurredAt is a real per-transaction date ("explicit", e.g. a dated
+    // import row or the manual date picker) or just the moment it was entered
+    // ("estimated", the default when a path stamps now()). Drives the Analytics
+    // date-reliability gate — time/entity-level cards only show for date-reliable
+    // data. Existing rows default "estimated": never claim a date we can't verify.
+    occurredAtSource: text("occurred_at_source")
+      .$type<"explicit" | "estimated">()
+      .default("estimated")
+      .notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => ({
@@ -454,18 +481,18 @@ export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
   edges: many(edges),
   branches: many(branches),
   simulations: many(simulations),
-  voiceRecordings: many(voiceRecordings),
   facts: many(facts),
+  importBatches: many(importBatches),
 }));
 
-export const voiceRecordingsRelations = relations(voiceRecordings, ({ one, many }) => ({
-  workspace: one(workspaces, { fields: [voiceRecordings.workspaceId], references: [workspaces.id] }),
+export const importBatchesRelations = relations(importBatches, ({ one, many }) => ({
+  workspace: one(workspaces, { fields: [importBatches.workspaceId], references: [workspaces.id] }),
   facts: many(facts),
 }));
 
 export const factsRelations = relations(facts, ({ one }) => ({
   workspace: one(workspaces, { fields: [facts.workspaceId], references: [workspaces.id] }),
-  recording: one(voiceRecordings, { fields: [facts.recordingId], references: [voiceRecordings.id] }),
+  batch: one(importBatches, { fields: [facts.batchId], references: [importBatches.id] }),
 }));
 
 export const materialsRelations = relations(materials, ({ one, many }) => ({

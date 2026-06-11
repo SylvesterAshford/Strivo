@@ -5,9 +5,10 @@ import {
   getOrCreateMobileWorkspace,
   withWorkspaceScope,
 } from "@/lib/auth/mobile";
-import { facts } from "@/db/schema";
+import { facts, importBatches } from "@/db/schema";
 import { createId } from "@/lib/id";
 import { extractFacts } from "@/lib/extraction/mobile-facts";
+import { newBatchId } from "@/lib/import/batches";
 import { triggerInsightsRegen } from "@/lib/insights/cache";
 
 export const runtime = "nodejs";
@@ -44,23 +45,43 @@ export async function POST(req: Request) {
 
   const workspace = await getOrCreateMobileWorkspace(user);
   const now = new Date();
+  const batchId = newBatchId();
   const rows = drafts.map((d) => ({
     id: `fact_${createId()}`,
     workspaceId: workspace.id,
-    recordingId: null,
+    batchId,
     kind: d.kind,
     amountMmk: d.amountMmk ?? null,
     description: d.description.slice(0, 200),
     counterparty: d.counterparty ?? null,
     category: d.category ?? null,
+    productName: d.kind === "sale" ? (d.productName ?? null) : null,
+    quantity: d.kind === "sale" ? (d.quantity ?? null) : null,
+    unitPriceMmk:
+      d.kind === "sale" && d.amountMmk && d.quantity ? Math.round(d.amountMmk / d.quantity) : null,
     occurredAt: now,
+    // Free-text import has no per-row date — stamps "now", so not date-reliable.
+    occurredAtSource: "estimated" as const,
     createdAt: now,
   }));
 
   await withWorkspaceScope(workspace.id, async (tx) => {
+    // Text imports are tracked as batches (history + undo) but never deduped —
+    // pasted text is explicit user intent, and occurredAt=now keys can't
+    // meaningfully collide with prior imports anyway.
+    await tx.insert(importBatches).values({
+      id: batchId,
+      workspaceId: workspace.id,
+      source: "sales-text",
+      fileName: null,
+      rowCount: rows.length,
+      insertedCount: rows.length,
+      skippedCount: 0,
+      createdAt: now,
+    });
     await tx.insert(facts).values(rows);
   });
   triggerInsightsRegen(workspace.id);
 
-  return NextResponse.json({ inserted: rows.length });
+  return NextResponse.json({ inserted: rows.length, batchId });
 }

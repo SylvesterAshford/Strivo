@@ -93,6 +93,13 @@ body {
   max-width: var(--content-max);
   margin-inline: auto;
   padding: 20px 20px 104px; /* bottom clears the mobile dock */
+  /* Column flex (block-equivalent for stacked children) so direct Text
+     children get blockified — Text renders an inline <span>, and inline
+     elements silently drop vertical margins. Without this, page titles and
+     eyebrows placed directly under Screen lose their marginBottom. */
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
 }
 .screen-fill {
   flex: 1;
@@ -111,7 +118,11 @@ body {
   }
 }
 
-/* Responsive card grid — 1 col on mobile, fills width on desktop. */
+/* Responsive card grid — 1 col on mobile; an EQUAL 2-col grid on desktop so the
+   two columns line up tidily (cards top-aligned in rows, equal widths) instead
+   of the old masonry that staggered the columns. Variable card heights can leave
+   a gap under a shorter card before its next row — the tradeoff for clean,
+   aligned columns. */
 .card-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -120,8 +131,93 @@ body {
 }
 @media (min-width: 768px) {
   .card-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, 1fr);
   }
+}
+
+/* Reports grid — like card-grid but rows STRETCH so paired cards share a
+   bottom edge (the ragged masonry look read as "unorganized"). Direct
+   children fill their row height; card content stays top-aligned. */
+.report-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  align-items: stretch;
+}
+@media (min-width: 768px) {
+  .report-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .report-grid > .report-span {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Month stat band — the scan-first row of the report: three figures side by
+   side on desktop, stacked on mobile. */
+.stat-band {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+@media (min-width: 640px) {
+  .stat-band {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+  }
+  .stat-band > * + * {
+    border-left: 1px solid #eef2f6;
+    padding-left: 28px;
+  }
+}
+
+/* Recent-entry delete control — calm by default, a soft red tint on hover so
+   it reads as "this removes the row" without a permanent red wall. Full row
+   height so the tint covers the trailing edge cleanly. */
+.entry-delete {
+  align-self: stretch;
+  transition: background-color 0.15s ease;
+  cursor: pointer;
+}
+.entry-delete:hover {
+  background-color: rgba(185, 28, 28, 0.08);
+}
+
+/* Liquid-glass surfaces — frosted, translucent, with the logo-violet outline.
+   Used for the active nav pill and the sidebar Add-data button. Identity accent
+   only; the slate theme and black/white button fills are untouched. */
+.nav-glass {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.42));
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 6px 20px rgba(124, 58, 237, 0.14);
+}
+.btn-glass {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.5));
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  backdrop-filter: blur(18px) saturate(180%);
+  border: 1px solid rgba(124, 58, 237, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 4px 16px rgba(124, 58, 237, 0.12);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
+}
+.btn-glass:hover {
+  border-color: rgba(124, 58, 237, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 6px 22px rgba(124, 58, 237, 0.2);
+}
+
+/* Every interactive element (Pressable renders role="button") gets the same
+   logo-violet outline on click AND keyboard focus — one consistent treatment
+   across the whole app, desktop and mobile. Fills are untouched. */
+button:focus-visible,
+[role="button"]:focus-visible,
+a:focus-visible,
+button:active,
+[role="button"]:active {
+  outline: 2px solid rgba(124, 58, 237, 0.6);
+  outline-offset: 2px;
+  border-radius: inherit;
 }
 
 /* Home dashboard KPI row — auto-fits 1→3 across as width allows. */

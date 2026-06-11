@@ -6,13 +6,13 @@ import { AppText } from "@/components/ui/AppText";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { useAuth } from "@/contexts/AuthContext";
-import { clientEnv as env, isSupabaseConfigured } from "@/lib/client-env";
+import { isSupabaseConfigured } from "@/lib/client-env";
 import { colors, spacing, radius, type } from "@/theme/tokens";
 import { my } from "@/i18n/my";
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
-  const { signInWithGoogle, signInWithEmailPassword, signInAnonymously, resetPassword } = useAuth();
+  const { signInWithGoogle, signInWithEmailPassword, resetPassword } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -57,12 +57,6 @@ export default function LoginScreen() {
     else Alert.alert(my.auth.forgotPassword, my.auth.resetSent);
   };
 
-  const onDevSkip = async () => {
-    setBusy("email");
-    const { error } = await signInAnonymously();
-    setBusy(null);
-    if (error) setError(error);
-  };
 
   const emailDisabled = busy !== null || email.trim().length === 0 || password.length === 0;
 
@@ -201,13 +195,6 @@ export default function LoginScreen() {
           </Pressable>
         </View>
 
-        {env.authBypass && (
-          <Pressable onPress={() => void onDevSkip()} disabled={busy !== null} style={{ marginTop: spacing.md, alignItems: "center" }}>
-            <AppText variant="caption" color="tertiary">
-              DEV: Skip login
-            </AppText>
-          </Pressable>
-        )}
       </View>
     </KeyboardAvoidingView>
   );

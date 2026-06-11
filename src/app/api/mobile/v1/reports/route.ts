@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { withMobileAuth } from "@/lib/auth/mobile";
 import { facts } from "@/db/schema";
 import { eq, and, gte, lt, sum, count, sql, desc, isNotNull } from "drizzle-orm";
+import { resolveReviewedMonth } from "@/lib/advisor/period";
+import { monthBounds, ym } from "@/lib/advisor/monthly";
 
 // Build the 7-day window: day 0 = today, day 6 = 6 days ago (all in local UTC).
 function weekWindow(): { dayStart: Date; dayEnd: Date; label: string }[] {
@@ -28,11 +30,17 @@ export async function GET(req: Request) {
   const weekEnd = days[6].dayEnd;
 
   // === Month totals ===
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  monthStart.setHours(0, 0, 0, 0);
-  const nextMonthStart = new Date(monthStart);
-  nextMonthStart.setMonth(nextMonthStart.getMonth() + 1);
+  // Anchor on the SAME month Home reviews (most-recent month with data, MMT) so
+  // the receipts reconcile with the verdict. When there's no data at all, fall
+  // back to the current MMT calendar month so the screen still renders a labelled
+  // (empty) month. See strivo-screen-logic.md "trust reconciliation rule".
+  const reviewed = await resolveReviewedMonth(db, wsId);
+  const period = reviewed ?? (() => {
+    const b = monthBounds(new Date());
+    return { start: b.start, end: b.end, periodMonth: ym(b.start) };
+  })();
+  const monthStart = period.start;
+  const nextMonthStart = period.end;
 
   // Run all queries in parallel — Neon round-trip is the bottleneck.
   const [
@@ -43,6 +51,8 @@ export async function GET(req: Request) {
     topCustomerRows,
     categoryRows,
     expenseCategoryRows,
+    topProductRows,
+    [coverageRow],
   ] = await Promise.all([
     db
       .select({
@@ -145,6 +155,38 @@ export async function GET(req: Request) {
       )
       .groupBy(facts.category)
       .orderBy(desc(sum(facts.amountMmk))),
+    // Top products this month — gated card; only sales with structured
+    // productName count (input contract, CEO plan 2026-06-11).
+    db
+      .select({
+        name: facts.productName,
+        totalMmk: sum(facts.amountMmk),
+        units: sum(facts.quantity),
+        count: count(facts.id),
+      })
+      .from(facts)
+      .where(
+        and(
+          eq(facts.workspaceId, wsId),
+          eq(facts.kind, "sale"),
+          isNotNull(facts.productName),
+          gte(facts.occurredAt, monthStart),
+          lt(facts.occurredAt, nextMonthStart)
+        )
+      )
+      .groupBy(facts.productName)
+      .orderBy(desc(sum(facts.amountMmk)))
+      .limit(5),
+    // Coverage flags (all-time, not month-scoped) — drive the unlock-next
+    // slot: which valuable inputs has this workspace never provided?
+    db
+      .select({
+        hasExpenses: sql<boolean>`bool_or(${facts.kind} = 'expense')`,
+        hasProducts: sql<boolean>`bool_or(${facts.kind} = 'sale' AND ${facts.productName} IS NOT NULL)`,
+        hasCounterparties: sql<boolean>`bool_or(${facts.kind} = 'sale' AND ${facts.counterparty} IS NOT NULL)`,
+      })
+      .from(facts)
+      .where(eq(facts.workspaceId, wsId)),
   ]);
 
   // Map rows into day buckets
@@ -169,6 +211,9 @@ export async function GET(req: Request) {
   return NextResponse.json({
     week: weekData,
     month: {
+      // periodMonth matches Home's advisor.periodMonth — the two screens label
+      // and total the same reviewed month.
+      periodMonth: period.periodMonth,
       salesMmk: monthSalesMmk,
       expensesMmk: monthExpensesMmk,
       netMmk: monthSalesMmk - monthExpensesMmk,
@@ -196,6 +241,17 @@ export async function GET(req: Request) {
       counterparty: r.counterparty,
       occurredAt: r.occurredAt,
     })),
+    topProducts: topProductRows.map((r) => ({
+      name: r.name ?? "",
+      totalMmk: parseInt(String(r.totalMmk ?? "0"), 10) || 0,
+      units: parseInt(String(r.units ?? "0"), 10) || 0,
+      count: Number(r.count) || 0,
+    })),
+    coverage: {
+      hasExpenses: !!coverageRow?.hasExpenses,
+      hasProducts: !!coverageRow?.hasProducts,
+      hasCounterparties: !!coverageRow?.hasCounterparties,
+    },
   });
   });
 }

@@ -10,6 +10,7 @@ import { AdvisorCard } from "@/components/home/AdvisorCard";
 import { AdvisorActions } from "@/components/home/AdvisorActions";
 import { RecentEntries } from "@/components/home/RecentEntries";
 import { ProfileNudge } from "@/components/home/ProfileNudge";
+import { UnlockNext } from "@/components/app/UnlockNext";
 import { QueryError } from "@/components/layout/QueryError";
 import { Skeleton } from "@/components/layout/Skeleton";
 import { View } from "@/rn";
@@ -28,7 +29,9 @@ export default function HomeScreen() {
   const { data: home, isError, isLoading, refetch } = useQuery({
     queryKey: ["home"],
     queryFn: fetchHome,
-    staleTime: 30_000,
+    // 60s: a quick tab-flick back within the minute skips the focus refetch;
+    // after that it refreshes. Cuts the redundant focus-refetch bursts.
+    staleTime: 60_000,
     refetchOnWindowFocus: true,
   });
 
@@ -59,6 +62,8 @@ export default function HomeScreen() {
         <>
           <AdvisorCard advisor={home.advisor} />
           <AdvisorActions actions={home.advisor.actions} periodMonth={home.advisor.periodMonth} />
+          {/* One recruiting card max — names the highest-value missing input. */}
+          <UnlockNext />
           <RecentEntries entries={fallbackEntries} label="RECENT" />
         </>
       ) : hasAnyData ? (

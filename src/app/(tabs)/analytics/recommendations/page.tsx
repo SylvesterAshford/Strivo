@@ -4,6 +4,7 @@ import { View } from "@/rn";
 import { useQuery } from "@tanstack/react-query";
 import { Screen } from "@/components/layout/Screen";
 import { SubHeader } from "@/components/layout/SubHeader";
+import { AppText } from "@/components/ui/AppText";
 import { RecCard } from "@/components/analytics/widgets";
 import { fetchInsights } from "@/lib/api";
 import { spacing } from "@/theme/tokens";
@@ -16,10 +17,14 @@ export default function RecommendationsDetail() {
     staleTime: 5 * 60_000,
   });
 
-  if (!data || data.ready === false) {
+  // insights (the LLM blob) regenerates in the background — may be null on first load.
+  if (!data || data.ready === false || data.insights == null) {
     return (
       <Screen>
         <SubHeader title={my.analytics.recommendations} />
+        <AppText variant="body" color="secondary" style={{ marginTop: spacing.lg }}>
+          {my.analytics.analyzing}
+        </AppText>
       </Screen>
     );
   }

@@ -95,7 +95,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(data.session);
       lastUserId.current = uid;
       if (data.session && uid) {
-        setSyncing(true);
+        // Returning user on this device: the persisted profile store already
+        // knows they're onboarded, so the redirect decision needs nothing
+        // from the server — render the app NOW and hydrate in the background.
+        // Only first-time-on-device sign-ins block on sync (we must learn
+        // wizard-vs-tabs from the backend before routing).
+        const knownOnboarded = useProfile.getState().onboarded;
+        if (!knownOnboarded) setSyncing(true);
         void hydrateFromBackend(uid);
       }
       setInitializing(false);
@@ -124,11 +130,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       lastUserId.current = nextId;
       setSession(next);
 
-      // Only kick off hydration for an explicit sign-in (new session from
-      // the login screen), not for INITIAL_SESSION (already handled by
-      // getSession() above).
-      if (event === "SIGNED_IN" && nextId) {
-        setSyncing(true);
+      // Only kick off hydration for a GENUINE new sign-in. supabase-js re-fires
+      // SIGNED_IN every time the tab regains focus (it re-validates the session);
+      // without the hydratedForRef guard, each tab-return re-runs the backend
+      // hydrate and flashes the loading splash. Same guard the INITIAL_SESSION
+      // branch above already uses — a user we've already hydrated is skipped.
+      if (event === "SIGNED_IN" && nextId && hydratedForRef.current !== nextId) {
+        // Same returning-user shortcut as cold start: only block when the
+        // local store can't answer the wizard-vs-tabs question itself.
+        if (!useProfile.getState().onboarded) setSyncing(true);
         void hydrateFromBackend(nextId);
       }
     });

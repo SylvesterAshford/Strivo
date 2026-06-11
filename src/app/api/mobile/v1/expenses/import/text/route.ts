@@ -5,9 +5,10 @@ import {
   getOrCreateMobileWorkspace,
   withWorkspaceScope,
 } from "@/lib/auth/mobile";
-import { facts } from "@/db/schema";
+import { facts, importBatches } from "@/db/schema";
 import { createId } from "@/lib/id";
 import { extractFacts } from "@/lib/extraction/mobile-facts";
+import { newBatchId } from "@/lib/import/batches";
 import { triggerInsightsRegen } from "@/lib/insights/cache";
 
 export const runtime = "nodejs";
@@ -47,23 +48,37 @@ export async function POST(req: Request) {
 
   const workspace = await getOrCreateMobileWorkspace(user);
   const now = new Date();
+  const batchId = newBatchId();
   const rows = expenseDrafts.map((d) => ({
     id: `fact_${createId()}`,
     workspaceId: workspace.id,
-    recordingId: null,
+    batchId,
     kind: "expense" as const,
     amountMmk: d.amountMmk ?? null,
     description: d.description.slice(0, 200),
     counterparty: d.counterparty ?? null,
     category: d.category ?? null,
     occurredAt: now,
+    // Free-text import has no per-row date — stamps "now", so not date-reliable.
+    occurredAtSource: "estimated" as const,
     createdAt: now,
   }));
 
   await withWorkspaceScope(workspace.id, async (tx) => {
+    // Tracked as a batch (history + undo); text imports are never deduped.
+    await tx.insert(importBatches).values({
+      id: batchId,
+      workspaceId: workspace.id,
+      source: "expenses-text",
+      fileName: null,
+      rowCount: rows.length,
+      insertedCount: rows.length,
+      skippedCount: 0,
+      createdAt: now,
+    });
     await tx.insert(facts).values(rows);
   });
   triggerInsightsRegen(workspace.id);
 
-  return NextResponse.json({ inserted: rows.length });
+  return NextResponse.json({ inserted: rows.length, batchId });
 }

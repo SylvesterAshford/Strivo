@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { authenticateMobileRequest, getOrCreateMobileWorkspace } from "@/lib/auth/mobile";
-import { parseWorkbook, detectColumnMapping } from "@/lib/import/sales-excel";
+import { parseWorkbook, detectColumnMapping, rowsToFacts } from "@/lib/import/sales-excel";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -45,6 +45,10 @@ export async function POST(req: Request) {
     mapping = { date: -1, customer: -1, amount: -1, product: -1, quantity: -1 };
   }
 
+  // Surface data-quality flags at preview so the user sees bad rows BEFORE
+  // confirming. Confirm re-runs the same validation server-side.
+  const { facts, flagged } = rowsToFacts(sheet, mapping);
+
   return NextResponse.json({
     headers: sheet.headers,
     // Cap returned rows so payload stays small; full rows come back on confirm.
@@ -52,5 +56,8 @@ export async function POST(req: Request) {
     rows: sheet.rows,
     mapping,
     totalRows: sheet.rows.length,
+    usableRows: facts.length,
+    flagged,
+    flaggedCount: flagged.length,
   });
 }

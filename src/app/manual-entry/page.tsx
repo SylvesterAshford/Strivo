@@ -63,7 +63,7 @@ export default function ManualEntryScreen() {
         category: showCategory && category.trim() ? category.trim() : undefined,
       };
 
-      await confirmFacts(null, [fact]);
+      await confirmFacts([fact]);
       await queryClient.invalidateQueries({ queryKey: ["home"] });
       await queryClient.invalidateQueries({ queryKey: ["reports"] });
       await queryClient.invalidateQueries({ queryKey: ["analytics"] });

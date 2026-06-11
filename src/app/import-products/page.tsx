@@ -1,23 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { View, Pressable, StyleSheet, ActivityIndicator } from "@/rn";
+import { View, Pressable, StyleSheet } from "@/rn";
 import { useRouter } from "@/rn/router";
 import { useQueryClient } from "@tanstack/react-query";
-import { DocumentPicker } from "@/rn/expo";
 import { Screen } from "@/components/layout/Screen";
 import { SubHeader } from "@/components/layout/SubHeader";
 import { AppText } from "@/components/ui/AppText";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
 import { Icon } from "@/components/ui/Icon";
+import { ImportDropzone } from "@/components/import/ImportDropzone";
 import { importProductsFile, importProductsText, fetchProfile, saveProfile, type ProductSeed } from "@/lib/api";
 import { colors, spacing, radius } from "@/theme/tokens";
 import { my } from "@/i18n/my";
 
 type Mode = "initial" | "paste" | "review";
-
-const XLSX_TYPES = ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel"];
 
 export default function ImportProductsScreen() {
   const router = useRouter();
@@ -29,17 +27,11 @@ export default function ImportProductsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<number | null>(null);
 
-  const pickFile = async (type: "xlsx" | "pdf") => {
+  const onFile = async (asset: { uri: string; name: string; mimeType: string }) => {
     setError(null);
-    const res = await DocumentPicker.getDocumentAsync({
-      type: type === "xlsx" ? XLSX_TYPES : ["application/pdf"],
-      copyToCacheDirectory: true,
-    });
-    if (res.canceled || !res.assets?.[0]) return;
-    const asset = res.assets[0];
     setBusy(true);
     try {
-      const data = await importProductsFile(asset.uri, asset.name, asset.mimeType ?? (type === "pdf" ? "application/pdf" : XLSX_TYPES[0]));
+      const data = await importProductsFile(asset.uri, asset.name, asset.mimeType);
       setProducts(data.products);
       setMode("review");
     } catch (e) {
@@ -196,26 +188,41 @@ export default function ImportProductsScreen() {
     );
   }
 
-  // ── Initial — 3 input options ─────────────────────────────────────────
+  // ── Initial — dropzone (xlsx/pdf) + paste secondary ────────────────────
   return (
     <Screen>
       <SubHeader title={my.importProducts.title} />
-      <AppText variant="body" color="secondary" style={{ marginBottom: spacing["2xl"] }}>
-        {my.importProducts.subtitle}
-      </AppText>
-
-      <View style={{ gap: spacing.md }}>
-        <Button label={busy ? my.importProducts.analyzing : my.importProducts.pickExcel} onPress={() => pickFile("xlsx")} disabled={busy} />
-        <Button label={my.importProducts.pickPdf} variant="secondary" onPress={() => pickFile("pdf")} disabled={busy} />
-        <Button label={my.importProducts.pasteText} variant="secondary" onPress={() => setMode("paste")} disabled={busy} />
-      </View>
-
-      {busy ? <ActivityIndicator color={colors.accent.base} style={{ marginTop: spacing.lg }} /> : null}
-      {error ? (
-        <AppText variant="caption" style={{ color: colors.semantic.critical, marginTop: spacing.md }}>
-          {error}
+      <View style={{ width: "100%", alignItems: "center" }}>
+      <View style={{ maxWidth: 560, width: "100%" }}>
+        <AppText variant="body" color="secondary" style={{ marginBottom: spacing.xl }}>
+          {my.importProducts.subtitle}
         </AppText>
-      ) : null}
+
+        <ImportDropzone
+          onFile={onFile}
+          busy={busy}
+          accept=".xlsx,.xls,.pdf"
+          hint={my.imports.dropHintProducts}
+        />
+
+        <View
+          style={{
+            marginTop: spacing.xl,
+            paddingTop: spacing.lg,
+            borderTopWidth: 1,
+            borderTopColor: colors.border.hairline,
+          }}
+        >
+          <Button label={my.importProducts.pasteText} variant="secondary" onPress={() => setMode("paste")} disabled={busy} />
+        </View>
+
+        {error ? (
+          <AppText variant="caption" style={{ color: colors.semantic.critical, marginTop: spacing.md }}>
+            {error}
+          </AppText>
+        ) : null}
+      </View>
+      </View>
     </Screen>
   );
 }

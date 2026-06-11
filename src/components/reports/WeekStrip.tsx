@@ -2,9 +2,9 @@
 
 import { View, StyleSheet } from "@/rn";
 import { AppText } from "@/components/ui/AppText";
-import { Eyebrow } from "@/components/ui/Eyebrow";
 import { colors, spacing, radius } from "@/theme/tokens";
 import { formatCurrency } from "@/lib/format";
+import { my } from "@/i18n/my";
 import type { WeekDay } from "@/lib/api";
 
 const BAR_HEIGHT = 72; // max bar height in px
@@ -26,7 +26,9 @@ export function WeekStrip({ days }: Props) {
 
   return (
     <View style={styles.card}>
-      <Eyebrow style={{ marginBottom: spacing.lg }}>WEEK</Eyebrow>
+      <AppText variant="title" style={{ marginBottom: spacing.lg }}>
+        {my.reports.weekTitle}
+      </AppText>
 
       <View style={styles.chart}>
         {days.map((day, i) => {

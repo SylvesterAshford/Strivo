@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import { decideRedirect, type GateState } from "./auth-gate-logic";
 
 const base: GateState = {
-  bypass: false,
   configured: true,
   hasSession: false,
   onboarded: false,
@@ -10,18 +9,6 @@ const base: GateState = {
 };
 
 describe("decideRedirect", () => {
-  describe("bypass mode", () => {
-    it("pushes login/onboarding back to the app", () => {
-      expect(decideRedirect({ ...base, bypass: true, pathname: "/login" })).toBe("/");
-      expect(decideRedirect({ ...base, bypass: true, pathname: "/onboarding" })).toBe("/");
-      expect(decideRedirect({ ...base, bypass: true, pathname: "/onboarding/periods" })).toBe("/");
-    });
-    it("stays put on app routes", () => {
-      expect(decideRedirect({ ...base, bypass: true, pathname: "/" })).toBeNull();
-      expect(decideRedirect({ ...base, bypass: true, pathname: "/reports" })).toBeNull();
-    });
-  });
-
   describe("configured, no session", () => {
     it("redirects to /login from a protected route", () => {
       expect(decideRedirect({ ...base, pathname: "/" })).toBe("/login");

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { authenticateMobileRequest, getOrCreateMobileWorkspace } from "@/lib/auth/mobile";
-import { parseWorkbook, detectExpenseColumnMapping } from "@/lib/import/expense-excel";
+import { parseWorkbook, detectExpenseColumnMapping, rowsToExpenseFacts } from "@/lib/import/expense-excel";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -43,11 +43,18 @@ export async function POST(req: Request) {
     mapping = { date: -1, amount: -1, category: -1, description: -1, counterparty: -1 };
   }
 
+  // Surface data-quality flags at preview so the user sees bad rows BEFORE
+  // confirming. Confirm re-runs the same validation server-side.
+  const { facts, flagged } = rowsToExpenseFacts(sheet, mapping);
+
   return NextResponse.json({
     headers: sheet.headers,
     sampleRows: sheet.rows.slice(0, 8),
     rows: sheet.rows,
     mapping,
     totalRows: sheet.rows.length,
+    usableRows: facts.length,
+    flagged,
+    flaggedCount: flagged.length,
   });
 }

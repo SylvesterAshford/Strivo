@@ -37,6 +37,52 @@ describe("resolveStyle", () => {
     });
   });
 
+  describe("flex shorthand → longhands (regression: shorthand+longhand mix warning)", () => {
+    it("expands flex: 1 to grow/shrink/basis and drops the shorthand", () => {
+      const css = resolveStyle({ flex: 1 });
+      expect(css.flexGrow).toBe(1);
+      expect(css.flexShrink).toBe(1);
+      expect(css.flexBasis).toBe("0%");
+      expect("flex" in css).toBe(false);
+    });
+    it("expands flex: 0 to a non-growing, non-shrinking box", () => {
+      const css = resolveStyle({ flex: 0 });
+      expect(css.flexGrow).toBe(0);
+      expect(css.flexShrink).toBe(0);
+      expect(css.flexBasis).toBe("auto");
+      expect("flex" in css).toBe(false);
+    });
+    it("passes a non-numeric flex value through untouched", () => {
+      expect(resolveStyle({ flex: "1 1 auto" }).flex).toBe("1 1 auto");
+    });
+  });
+
+  describe("margin/padding shorthand → longhands (no shorthand+longhand mix)", () => {
+    it("expands numeric margin to four longhands, drops the shorthand", () => {
+      const css = resolveStyle({ margin: 8 });
+      expect(css.marginTop).toBe(8);
+      expect(css.marginRight).toBe(8);
+      expect(css.marginBottom).toBe(8);
+      expect(css.marginLeft).toBe(8);
+      expect("margin" in css).toBe(false);
+    });
+    it("lets an explicit longhand override the expanded shorthand (key order)", () => {
+      const css = resolveStyle({ margin: 8, marginTop: 12 });
+      expect(css.marginTop).toBe(12);
+      expect(css.marginBottom).toBe(8);
+      expect("margin" in css).toBe(false);
+    });
+    it("expands numeric padding to four longhands", () => {
+      const css = resolveStyle({ padding: 4 });
+      expect(css.paddingTop).toBe(4);
+      expect(css.paddingLeft).toBe(4);
+      expect("padding" in css).toBe(false);
+    });
+    it("passes a multi-value string margin through untouched", () => {
+      expect(resolveStyle({ margin: "10px 20px" }).margin).toBe("10px 20px");
+    });
+  });
+
   describe("transform arrays → CSS string", () => {
     it("converts scale", () => {
       expect(resolveStyle({ transform: [{ scale: 0.98 }] }).transform).toBe("scale(0.98)");
@@ -62,7 +108,10 @@ describe("resolveStyle", () => {
     it("flattens an array, later entries win", () => {
       const css = resolveStyle([{ color: "red", padding: 1 }, false, { color: "blue" }]);
       expect(css.color).toBe("blue");
-      expect(css.padding).toBe(1);
+      // padding shorthand expands to longhands (no shorthand reaches the DOM).
+      expect(css.paddingTop).toBe(1);
+      expect(css.paddingLeft).toBe(1);
+      expect("padding" in css).toBe(false);
     });
     it("returns {} for null/undefined/false", () => {
       expect(resolveStyle(null)).toEqual({});

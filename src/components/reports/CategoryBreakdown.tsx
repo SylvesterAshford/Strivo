@@ -2,7 +2,6 @@
 
 import { View, StyleSheet } from "@/rn";
 import { AppText } from "@/components/ui/AppText";
-import { Eyebrow } from "@/components/ui/Eyebrow";
 import { colors, spacing, radius } from "@/theme/tokens";
 import { formatCurrency } from "@/lib/format";
 import { my } from "@/i18n/my";
@@ -21,13 +20,14 @@ const META: Record<ReportCategory["kind"], { label: string; color: string }> = {
 
 export function CategoryBreakdown({ categories }: Props) {
   const shown = categories.filter((c) => c.totalMmk > 0);
-  if (shown.length === 0) return null;
+  // Gate (input contract): a one-bar chart compares nothing. Hide until
+  // there are ≥2 kinds with money in them.
+  if (shown.length < 2) return null;
   const max = Math.max(...shown.map((c) => c.totalMmk), 1);
 
   return (
     <View style={styles.card}>
-      <Eyebrow style={{ marginBottom: spacing.lg }}>BREAKDOWN</Eyebrow>
-      <AppText variant="title" style={{ marginBottom: spacing.md }}>
+      <AppText variant="title" style={{ marginBottom: spacing.lg }}>
         {my.reports.categoryBreakdown}
       </AppText>
       <View style={{ gap: spacing.md }}>

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getLLM } from "@/lib/llm";
 import { parseWorkbook, type ParsedSheet } from "@/lib/import/sales-excel";
+import { cellText, parseAmountStrict, parseDateStrict, type FlaggedRow } from "./validate";
 
 export { parseWorkbook, type ParsedSheet };
 
@@ -72,45 +73,43 @@ export interface ExpenseDraftRow {
   occurredAt: Date;
 }
 
-const BURMESE_DIGITS: Record<string, string> = {
-  "၀": "0", "၁": "1", "၂": "2", "၃": "3", "၄": "4",
-  "၅": "5", "၆": "6", "၇": "7", "၈": "8", "၉": "9",
-};
-function toAsciiDigits(s: string): string {
-  return s.replace(/[၀-၉]/g, (d) => BURMESE_DIGITS[d] ?? d);
+export interface MappedExpenseRows {
+  facts: ExpenseDraftRow[];
+  /** Rows excluded for data quality — shown to the user, never inserted. */
+  flagged: FlaggedRow[];
 }
 
-function parseAmount(raw: unknown): number | null {
-  if (raw == null) return null;
-  if (typeof raw === "number") return Math.round(raw);
-  const cleaned = toAsciiDigits(String(raw)).replace(/[^0-9.-]/g, "");
-  const n = parseFloat(cleaned);
-  return Number.isFinite(n) ? Math.round(n) : null;
-}
-
-function parseDate(raw: unknown): Date | null {
-  if (raw == null) return null;
-  if (raw instanceof Date) return raw;
-  const s = toAsciiDigits(String(raw)).trim();
-  if (!s) return null;
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function cellText(raw: unknown): string {
-  if (raw == null) return "";
-  return String(raw).trim();
-}
-
+/** Same flag-don't-default rules as rowsToFacts in sales-excel.ts. */
 export function rowsToExpenseFacts(
   sheet: ParsedSheet,
   mapping: ExpenseColumnMapping
-): ExpenseDraftRow[] {
+): MappedExpenseRows {
   const out: ExpenseDraftRow[] = [];
-  for (const r of sheet.rows) {
-    const amount = mapping.amount >= 0 ? parseAmount(r[mapping.amount]) : null;
-    const date = mapping.date >= 0 ? parseDate(r[mapping.date]) : null;
-    if (amount === null && !date) continue;
+  const flagged: FlaggedRow[] = [];
+  for (let i = 0; i < sheet.rows.length; i++) {
+    const r = sheet.rows[i];
+    const rawAmount = mapping.amount >= 0 ? cellText(r[mapping.amount]) : "";
+    const rawDate = mapping.date >= 0 ? cellText(r[mapping.date]) : "";
+    if (rawAmount === "" && rawDate === "") continue;
+
+    const date = mapping.date >= 0 ? parseDateStrict(r[mapping.date]) : null;
+    if (mapping.date >= 0 && date === null) {
+      flagged.push({ rowIndex: i, reason: "bad_date", rawValue: rawDate });
+      continue;
+    }
+
+    let amount: number | null = null;
+    if (mapping.amount >= 0) {
+      if (rawAmount === "") {
+        flagged.push({ rowIndex: i, reason: "missing_amount", rawValue: "" });
+        continue;
+      }
+      amount = parseAmountStrict(r[mapping.amount]);
+      if (amount === null) {
+        flagged.push({ rowIndex: i, reason: "bad_amount", rawValue: rawAmount });
+        continue;
+      }
+    }
 
     const category = mapping.category >= 0 ? cellText(r[mapping.category]) : "";
     const description = mapping.description >= 0 ? cellText(r[mapping.description]) : "";
@@ -125,5 +124,5 @@ export function rowsToExpenseFacts(
       occurredAt: date ?? new Date(),
     });
   }
-  return out;
+  return { facts: out, flagged };
 }

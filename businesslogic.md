@@ -22,10 +22,11 @@ A **fact** is the atomic unit of everything Strivo knows:
 | `description` | free text (Burmese) |
 | `category` | expense bucket (e.g. ဆိုင်ခ, လုပ်ခ); optional, expenses only |
 | `counterparty` | customer (sales) or supplier (expenses); optional |
-| `occurredAt` | the **business date** the event happened, NOT insert time |
+| `productName` / `quantity` / `unitPriceMmk` | structured product enrichment; optional, sales only |
+| `occurredAt` (+ `occurredAtSource`) | the **business date** the event happened, NOT insert time; `explicit` (dated row / picker) vs `estimated` (stamped now) |
 
 Kind semantics:
-- **sale** — money in. Drives revenue, week/month sales, top customers.
+- **sale** — money in. Drives revenue, week/month sales, top customers, top products.
 - **expense** — money out. Drives expense totals and category breakdown.
 - **receivable** — money owed to the shop (sold on credit). Drives "outstanding".
 - **note** — a reminder with no amount (e.g. "restock eggs tomorrow"). Shows in the
@@ -33,6 +34,41 @@ Kind semantics:
 
 **Why `occurredAt` not `createdAt`:** a shop importing a month-old ledger must have
 those sales reported on the day they happened, so reports stay truthful.
+
+### 1.1 The input contract (CEO plan 2026-06-11)
+
+Required on every fact: `kind`, `description`, `occurredAt` (+source),
+`amountMmk` (> 0, ≤ 1B; null only on notes). Every optional enrichment unlocks
+a named feature — and features gate on **what the data contains, never on
+declared businessType**:
+
+| Enrichment | Unlocks |
+|---|---|
+| `counterparty` | Top customers · receivable follow-up actions · entity insights |
+| `category` (expense) | Expense breakdown · top-expense action · margin proxy (ပစ္စည်းသွင်း ≈ COGS) |
+| `productName` (+`quantity`, `unitPriceMmk`) | Top products · units sold · avg unit price |
+| `occurredAtSource = explicit` | Week strip + time-series cards (date-reliability gate) |
+
+`businessType`'s ONLY jobs: AI insight tone, and the products-vs-counterparties
+ordering tiebreak in the unlock-next slot. No tab logic may branch on it.
+
+**Unlock-next slot:** each tab renders at most ONE recruiting card naming the
+highest-value input the workspace has never provided (priority: expenses →
+products → counterparties; b2b/services rank counterparties before products),
+with a one-tap CTA to the matching import screen. Dismissible per month.
+Coverage flags (`hasExpenses` / `hasProducts` / `hasCounterparties`) are
+computed all-time in `reports/route.ts`.
+
+**Card gates (consistency matrix):** month stat band and profit numbers always
+show (the universal core: am I okay / in / out / left / who owes me). Gated:
+top customers (≥1 sale with counterparty) · top products (≥1 sale with
+productName) · category breakdown (≥2 kinds with money — a one-bar chart says
+nothing) · expense breakdown (≥1 categorized expense) · week strip (data in
+window) · receivables (≥1 open). A card's gate is identical for every business
+type.
+
+**Explicitly deferred:** payables (money owed to suppliers) — revisit when
+pilots ask; type-specific dashboards — rejected.
 
 ## 2. Home metrics (rolling windows)
 

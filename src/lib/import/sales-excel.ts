@@ -1,6 +1,9 @@
 import * as XLSX from "xlsx";
 import { z } from "zod";
 import { getLLM } from "@/lib/llm";
+import { cellText, parseAmountStrict, parseDateStrict, type FlaggedRow } from "./validate";
+
+export type { FlaggedRow };
 
 // Row as raw cells. Header cells go in headers[]; data rows in rows[].
 export interface ParsedSheet {
@@ -107,54 +110,70 @@ export interface DraftFactRow {
   amountMmk: number | null;
   counterparty: string | null;
   occurredAt: Date;
+  // Structured product enrichment — the mapping already detects these columns;
+  // storing them (not just concatenating into description) is what makes
+  // "what sells best?" answerable. Null when the sheet has no such column.
+  productName: string | null;
+  quantity: number | null;
+  unitPriceMmk: number | null;
 }
 
-const BURMESE_DIGITS: Record<string, string> = {
-  "၀": "0", "၁": "1", "၂": "2", "၃": "3", "၄": "4",
-  "၅": "5", "၆": "6", "၇": "7", "၈": "8", "၉": "9",
-};
-function toAsciiDigits(s: string): string {
-  return s.replace(/[၀-၉]/g, (d) => BURMESE_DIGITS[d] ?? d);
-}
-
-function parseAmount(raw: unknown): number | null {
-  if (raw == null) return null;
-  if (typeof raw === "number") return Math.round(raw);
-  const cleaned = toAsciiDigits(String(raw)).replace(/[^0-9.-]/g, "");
-  const n = parseFloat(cleaned);
-  return Number.isFinite(n) ? Math.round(n) : null;
-}
-
-function parseDate(raw: unknown): Date | null {
-  if (raw == null) return null;
-  if (raw instanceof Date) return raw;
-  const s = toAsciiDigits(String(raw)).trim();
-  if (!s) return null;
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function cellText(raw: unknown): string {
-  if (raw == null) return "";
-  return String(raw).trim();
+export interface MappedRows {
+  facts: DraftFactRow[];
+  /** Rows excluded for data quality — shown to the user, never inserted. */
+  flagged: FlaggedRow[];
 }
 
 /**
- * Apply a column mapping to parsed rows. Each row becomes a draft fact.
- * Rows without a usable amount AND without a date are dropped.
+ * Apply a column mapping to parsed rows. Each usable row becomes a draft fact;
+ * rows that fail strict validation are FLAGGED, never defaulted — a lenient
+ * date fallback once landed a sale dated 2000-12-31 in prod.
+ *
+ * Rules (mirrored in expense-excel):
+ * - both date and amount cells blank → silent skip (separator/blank line)
+ * - date column mapped but cell blank/unparseable/outside window → bad_date
+ * - amount column mapped: unparseable / ≤0 / >MAX_PLAUSIBLE_MMK → bad_amount,
+ *   blank → missing_amount
+ * - a column not detected at all (-1) imposes no rule, preserving the
+ *   manual-mapping fallback (amount null / occurredAt = import time)
  */
-export function rowsToFacts(sheet: ParsedSheet, mapping: ColumnMapping): DraftFactRow[] {
+export function rowsToFacts(sheet: ParsedSheet, mapping: ColumnMapping): MappedRows {
   const facts: DraftFactRow[] = [];
-  for (const r of sheet.rows) {
-    const amount = mapping.amount >= 0 ? parseAmount(r[mapping.amount]) : null;
-    const date = mapping.date >= 0 ? parseDate(r[mapping.date]) : null;
-    if (amount === null && !date) continue;
+  const flagged: FlaggedRow[] = [];
+  for (let i = 0; i < sheet.rows.length; i++) {
+    const r = sheet.rows[i];
+    const rawAmount = mapping.amount >= 0 ? cellText(r[mapping.amount]) : "";
+    const rawDate = mapping.date >= 0 ? cellText(r[mapping.date]) : "";
+    if (rawAmount === "" && rawDate === "") continue;
+
+    const date = mapping.date >= 0 ? parseDateStrict(r[mapping.date]) : null;
+    if (mapping.date >= 0 && date === null) {
+      flagged.push({ rowIndex: i, reason: "bad_date", rawValue: rawDate });
+      continue;
+    }
+
+    let amount: number | null = null;
+    if (mapping.amount >= 0) {
+      if (rawAmount === "") {
+        flagged.push({ rowIndex: i, reason: "missing_amount", rawValue: "" });
+        continue;
+      }
+      amount = parseAmountStrict(r[mapping.amount]);
+      if (amount === null) {
+        flagged.push({ rowIndex: i, reason: "bad_amount", rawValue: rawAmount });
+        continue;
+      }
+    }
 
     const customer = mapping.customer >= 0 ? cellText(r[mapping.customer]) : "";
     const product = mapping.product >= 0 ? cellText(r[mapping.product]) : "";
-    const quantity = mapping.quantity >= 0 ? cellText(r[mapping.quantity]) : "";
+    const quantityText = mapping.quantity >= 0 ? cellText(r[mapping.quantity]) : "";
+    // Quantity is a count, not money: strict positive integer or null.
+    const qtyParsed = quantityText ? parseAmountStrict(quantityText) : null;
+    const quantity = qtyParsed !== null && qtyParsed > 0 && qtyParsed <= 100_000 ? qtyParsed : null;
+    const unitPrice = amount !== null && quantity ? Math.round(amount / quantity) : null;
 
-    const parts = [product, quantity].filter(Boolean);
+    const parts = [product, quantityText].filter(Boolean);
     const description = parts.length > 0 ? parts.join(" × ") : "Excel import";
 
     facts.push({
@@ -162,7 +181,10 @@ export function rowsToFacts(sheet: ParsedSheet, mapping: ColumnMapping): DraftFa
       amountMmk: amount,
       counterparty: customer || null,
       occurredAt: date ?? new Date(),
+      productName: product ? product.slice(0, 80) : null,
+      quantity,
+      unitPriceMmk: unitPrice,
     });
   }
-  return facts;
+  return { facts, flagged };
 }

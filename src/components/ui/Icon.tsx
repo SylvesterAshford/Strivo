@@ -34,6 +34,10 @@ import {
   Pencil,
   FileSpreadsheet,
   Plus,
+  Download,
+  Trash2,
+  Camera,
+  Store,
   type LucideIcon,
 } from "lucide-react";
 import { colors } from "@/theme/tokens";
@@ -83,6 +87,10 @@ const REGISTRY: Record<string, LucideIcon | typeof GoogleMark> = {
   pencil: Pencil,
   spreadsheet: FileSpreadsheet,
   plus: Plus,
+  download: Download,
+  trash: Trash2,
+  camera: Camera,
+  store: Store,
 };
 
 export type IconName = keyof typeof REGISTRY;

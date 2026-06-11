@@ -25,9 +25,11 @@ function serialize(ws: {
   productsSeed: { name: string; priceMmk?: number }[] | null;
   suppliersSeed: { name: string; supplies?: string }[] | null;
   expensesSeed: { category: string; monthlyMmk?: number }[] | null;
+  avatarUrl: string | null;
 }) {
   return {
     businessName: ws.name,
+    avatarUrl: ws.avatarUrl,
     businessType: ws.businessType,
     productService: ws.productService,
     location: ws.location,
@@ -58,6 +60,13 @@ const RivalTierEnum = z.enum(["discount", "matcher", "premium"]);
 
 const ProfileBody = z.object({
   businessName: z.string().min(1).max(120).optional(),
+  // ≤256px JPEG data URL (~40KB base64; 120K cap leaves headroom) or null to clear.
+  avatarUrl: z
+    .string()
+    .regex(/^data:image\/(jpeg|png|webp);base64,/)
+    .max(120_000)
+    .nullable()
+    .optional(),
   businessType: z.string().max(40).nullable().optional(),
   productService: z.string().max(200).nullable().optional(),
   location: z.string().max(120).nullable().optional(),
@@ -116,6 +125,7 @@ export async function PUT(req: Request) {
       .update(workspaces)
     .set({
       ...(b.businessName !== undefined && { name: b.businessName }),
+      ...(b.avatarUrl !== undefined && { avatarUrl: b.avatarUrl }),
       ...(b.businessType !== undefined && { businessType: b.businessType }),
       ...(b.productService !== undefined && { productService: b.productService }),
       ...(b.location !== undefined && { location: b.location }),

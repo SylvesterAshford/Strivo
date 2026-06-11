@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { View, StyleSheet } from "@/rn";
-import { DocumentPicker } from "@/rn/expo";
 import { WizardStep } from "@/components/layout/WizardStep";
+import { ImportDropzone } from "@/components/import/ImportDropzone";
 import { AppText } from "@/components/ui/AppText";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { Button } from "@/components/ui/Button";
@@ -47,17 +47,11 @@ export default function BulkImportStep() {
     resetDraft();
   };
 
-  const onPickFile = async () => {
+  const onFile = async (asset: { uri: string; name: string; mimeType: string }) => {
     setError(null);
-    const res = await DocumentPicker.getDocumentAsync({
-      type: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel"],
-      copyToCacheDirectory: true,
-    });
-    if (res.canceled || !res.assets?.[0]) return;
-    const asset = res.assets[0];
     setBusy(true);
     try {
-      const data = await importSalesPreview(asset.uri, asset.name, asset.mimeType ?? "application/octet-stream");
+      const data = await importSalesPreview(asset.uri, asset.name, asset.mimeType);
       setPreview(data);
       setMapping(data.mapping);
       setMode("excel");
@@ -193,9 +187,9 @@ export default function BulkImportStep() {
       onCta={onSkip}
       ctaDisabled={busy}
     >
-      <View style={{ gap: spacing.md }}>
-        <Button label={busy ? my.onboarding.bulkAnalyzing : my.onboarding.bulkPick} onPress={onPickFile} disabled={busy} />
-        <Button label={my.onboarding.bulkPasteCta} variant="secondary" onPress={() => setMode("paste")} />
+      <View style={{ gap: spacing.lg }}>
+        <ImportDropzone onFile={onFile} busy={busy} />
+        <Button label={my.onboarding.bulkPasteCta} variant="secondary" onPress={() => setMode("paste")} disabled={busy} />
         {error ? (
           <AppText variant="caption" style={{ color: colors.semantic.critical }}>
             {error}

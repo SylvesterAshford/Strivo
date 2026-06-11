@@ -32,7 +32,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       lang="en"
       className={`${inter.variable} ${serif.variable} ${mono.variable} ${grotesk.variable} ${myanmar.variable}`}
     >
-      <body>
+      {/* Browser extensions (ColorZilla's cz-shortcut-listen, Grammarly, etc.)
+          inject attributes onto <body> before React hydrates. suppressHydrationWarning
+          scopes React to ignore attribute diffs on this one element. */}
+      <body suppressHydrationWarning>
         <Providers>
           <div id="app-frame">{children}</div>
         </Providers>

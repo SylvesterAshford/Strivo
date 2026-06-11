@@ -1,28 +1,21 @@
 import { NextResponse } from "next/server";
 import { withMobileAuth } from "@/lib/auth/mobile";
-import { facts, voiceRecordings } from "@/db/schema";
+import { facts } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 
 export const runtime = "nodejs";
 
 /**
  * Dump everything tied to the authenticated user: workspace profile + all
- * facts + all voice recordings. Returned as a downloadable JSON file.
+ * facts. Returned as a downloadable JSON file.
  */
 export async function GET(req: Request) {
   return withMobileAuth(req, async (db, workspace, user) => {
-    const [factRows, recordings] = await Promise.all([
-      db
-        .select()
-        .from(facts)
-        .where(eq(facts.workspaceId, workspace.id))
-        .orderBy(desc(facts.occurredAt)),
-      db
-        .select()
-        .from(voiceRecordings)
-        .where(eq(voiceRecordings.workspaceId, workspace.id))
-        .orderBy(desc(voiceRecordings.recordedAt)),
-    ]);
+    const factRows = await db
+      .select()
+      .from(facts)
+      .where(eq(facts.workspaceId, workspace.id))
+      .orderBy(desc(facts.occurredAt));
 
     const payload = {
       exportedAt: new Date().toISOString(),
@@ -56,7 +49,6 @@ export async function GET(req: Request) {
         updatedAt: workspace.updatedAt,
       },
       facts: factRows,
-      voiceRecordings: recordings,
     };
 
     const date = new Date().toISOString().slice(0, 10);

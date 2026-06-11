@@ -2,7 +2,6 @@
 
 import { View, StyleSheet } from "@/rn";
 import { AppText } from "@/components/ui/AppText";
-import { Eyebrow } from "@/components/ui/Eyebrow";
 import { colors, spacing, radius } from "@/theme/tokens";
 import { formatCurrency } from "@/lib/format";
 import { my } from "@/i18n/my";
@@ -28,8 +27,7 @@ export function ExpenseCategoryBreakdown({ categories }: Props) {
 
   return (
     <View style={styles.card}>
-      <Eyebrow style={{ marginBottom: spacing.lg }}>EXPENSES</Eyebrow>
-      <AppText variant="title" style={{ marginBottom: spacing.md }}>
+      <AppText variant="title" style={{ marginBottom: spacing.lg }}>
         {my.reports.expenseBreakdownTitle}
       </AppText>
       <View style={{ gap: spacing.md }}>

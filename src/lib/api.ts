@@ -128,6 +128,8 @@ export interface BusinessProfile {
   customersSeed: string[];
   productsSeed: ProductSeed[];
   suppliersSeed: SupplierSeed[];
+  /** Shop photo / logo as a small JPEG data URL, or null. */
+  avatarUrl: string | null;
 }
 
 export async function fetchProfile(): Promise<BusinessProfile | null> {
@@ -220,9 +222,24 @@ export interface ReportExpenseCategory {
   count: number;
 }
 
+export interface ReportTopProduct {
+  name: string;
+  totalMmk: number;
+  units: number;
+  count: number;
+}
+
+/** Which valuable inputs this workspace has EVER provided — drives the
+ *  unlock-next recruiting slot (input contract, CEO plan 2026-06-11). */
+export interface DataCoverage {
+  hasExpenses: boolean;
+  hasProducts: boolean;
+  hasCounterparties: boolean;
+}
+
 export interface ReportsData {
   week: WeekDay[];
-  month: { salesMmk: number; expensesMmk: number; netMmk: number };
+  month: { periodMonth: string; salesMmk: number; expensesMmk: number; netMmk: number };
   topCustomers: ReportTopCustomer[];
   categories: ReportCategory[];
   expenseCategories: ReportExpenseCategory[];
@@ -233,13 +250,24 @@ export interface ReportsData {
     counterparty: string | null;
     occurredAt: string;
   }[];
+  topProducts: ReportTopProduct[];
+  coverage: DataCoverage;
 }
 
 export async function fetchReports(): Promise<ReportsData> {
   return authedJson<ReportsData>("/api/mobile/v1/reports");
 }
 
-// ── Voice pipeline ────────────────────────────────────────────────────────────
+/** Drill-down: the transactions behind a figure, filtered by month (YYYY-MM) and/or kind. */
+export async function fetchTransactions(params: { month?: string; kind?: string }): Promise<{ entries: RecentEntry[] }> {
+  const q = new URLSearchParams();
+  if (params.month) q.set("month", params.month);
+  if (params.kind) q.set("kind", params.kind);
+  const qs = q.toString();
+  return authedJson<{ entries: RecentEntry[] }>(`/api/mobile/v1/facts${qs ? `?${qs}` : ""}`);
+}
+
+// ── Facts (manual + import entry) ───────────────────────────────────────────
 
 export interface DraftFact {
   kind: "sale" | "expense" | "receivable" | "note";
@@ -250,54 +278,11 @@ export interface DraftFact {
   category?: string;
 }
 
-export interface VoiceUploadResult {
-  recordingId: string;
-  transcript: string;
-  facts: DraftFact[];
-}
-
-/** Upload a recorded audio file for transcription and fact extraction. */
-export async function uploadVoice(
-  audioUri: string,
-  mimeType: string,
-  durationSecs: number
-): Promise<VoiceUploadResult> {
-  const form = new FormData();
-  const blob = await blobFromUri(audioUri);
-  form.append("audio", blob, "recording.m4a");
-  form.append("durationSecs", String(Math.round(durationSecs)));
-
-  const headers = await bearerHeaders();
-  const controller = new AbortController();
-  // Voice upload + transcription + Gemini extraction — generous timeout.
-  const timer = setTimeout(() => controller.abort(), 120_000);
-  let res: Response;
-  try {
-    res = await fetch(`${env.apiBaseUrl}/api/mobile/v1/voice/upload`, {
-      method: "POST",
-      headers,
-      body: form,
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timer);
-  }
-
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(err.error ?? `Upload failed (${res.status})`);
-  }
-  return res.json() as Promise<VoiceUploadResult>;
-}
-
 /** Save the user-confirmed (and possibly edited) facts. */
-export async function confirmFacts(
-  recordingId: string | null,
-  facts: DraftFact[]
-): Promise<void> {
+export async function confirmFacts(facts: DraftFact[]): Promise<void> {
   await authedJson("/api/mobile/v1/facts/confirm", {
     method: "POST",
-    body: JSON.stringify({ recordingId: recordingId ?? undefined, facts }),
+    body: JSON.stringify({ facts }),
   });
 }
 
@@ -355,7 +340,7 @@ export async function exportMyData(): Promise<string> {
   return res.text();
 }
 
-/** Delete the authenticated user's workspace + facts + recordings, plus the
+/** Delete the authenticated user's workspace + facts, plus the
  *  Supabase auth row when real auth is on. Cascades server-side. */
 export async function deleteMyAccount(): Promise<void> {
   await authedJson<{ deleted: true }>("/api/mobile/v1/users/me", { method: "DELETE" });
@@ -371,12 +356,30 @@ export interface ColumnMapping {
   quantity: number;
 }
 
+/** A row excluded for data quality — surfaced to the user, never inserted. */
+export interface FlaggedImportRow {
+  rowIndex: number;
+  reason: "bad_date" | "bad_amount" | "missing_amount";
+  rawValue: string;
+}
+
+export interface ImportConfirmResponse {
+  inserted: number;
+  skipped: number;
+  batchId: string;
+  flagged: FlaggedImportRow[];
+  flaggedCount: number;
+}
+
 export interface ImportPreviewResponse {
   headers: string[];
   sampleRows: (string | number | null)[][];
   rows: (string | number | null)[][];
   mapping: ColumnMapping;
   totalRows: number;
+  usableRows: number;
+  flagged: FlaggedImportRow[];
+  flaggedCount: number;
 }
 
 /** Upload an XLSX/XLS file. Backend parses + LLM-detects column mapping. */
@@ -411,16 +414,21 @@ export async function importSalesPreview(
   return res.json() as Promise<ImportPreviewResponse>;
 }
 
-/** Confirm the (possibly edited) column mapping and bulk-insert facts. */
+/** Confirm the (possibly edited) column mapping and bulk-insert facts.
+ *  Server dedupes against prior imports — `skipped` rows already existed. */
 export async function importSalesConfirm(
   headers: string[],
   rows: (string | number | null)[][],
-  mapping: ColumnMapping
-): Promise<{ inserted: number }> {
-  return authedJson<{ inserted: number }>("/api/mobile/v1/sales/import/confirm", {
-    method: "POST",
-    body: JSON.stringify({ headers, rows, mapping }),
-  });
+  mapping: ColumnMapping,
+  fileName?: string
+): Promise<ImportConfirmResponse> {
+  return authedJson<ImportConfirmResponse>(
+    "/api/mobile/v1/sales/import/confirm",
+    {
+      method: "POST",
+      body: JSON.stringify({ headers, rows, mapping, fileName }),
+    }
+  );
 }
 
 /** Extract a product catalogue from an Excel or PDF file. Returns the list — caller saves. */
@@ -493,6 +501,9 @@ export interface ExpenseImportPreviewResponse {
   rows: (string | number | null)[][];
   mapping: ExpenseColumnMapping;
   totalRows: number;
+  usableRows: number;
+  flagged: FlaggedImportRow[];
+  flaggedCount: number;
 }
 
 export async function importExpensesPreview(
@@ -528,12 +539,38 @@ export async function importExpensesPreview(
 export async function importExpensesConfirm(
   headers: string[],
   rows: (string | number | null)[][],
-  mapping: ExpenseColumnMapping
-): Promise<{ inserted: number }> {
-  return authedJson<{ inserted: number }>("/api/mobile/v1/expenses/import/confirm", {
-    method: "POST",
-    body: JSON.stringify({ headers, rows, mapping }),
-  });
+  mapping: ExpenseColumnMapping,
+  fileName?: string
+): Promise<ImportConfirmResponse> {
+  return authedJson<ImportConfirmResponse>(
+    "/api/mobile/v1/expenses/import/confirm",
+    {
+      method: "POST",
+      body: JSON.stringify({ headers, rows, mapping, fileName }),
+    }
+  );
+}
+
+// ── Import history (batches) ─────────────────────────────────────────────────
+
+export interface ImportBatch {
+  id: string;
+  source: "sales-excel" | "expenses-excel" | "sales-text" | "expenses-text";
+  fileName: string | null;
+  rowCount: number;
+  insertedCount: number;
+  skippedCount: number;
+  createdAt: string;
+}
+
+/** List previous imports, newest first. */
+export async function fetchImports(): Promise<{ batches: ImportBatch[] }> {
+  return authedJson<{ batches: ImportBatch[] }>("/api/mobile/v1/imports");
+}
+
+/** Undo an import — deletes the batch and every fact it created. */
+export async function deleteImportBatch(id: string): Promise<void> {
+  await authedJson<{ deleted: true }>(`/api/mobile/v1/imports/${id}`, { method: "DELETE" });
 }
 
 export async function importExpensesText(
@@ -596,11 +633,22 @@ export interface StrategicInsights {
   };
 }
 
+export interface AnalyticsReceivable {
+  id: string;
+  description: string;
+  amountMmk: number | null;
+  counterparty: string | null;
+  occurredAt: string;
+}
+
 export type InsightsResponse =
   | { ready: false }
   | {
       ready: true;
-      insights: StrategicInsights;
+      // Deterministic, reconciles with Home/Reports. Always present when ready.
+      analytics: { advisor: AdvisorHome | null; receivables: AnalyticsReceivable[] };
+      // LLM strategic blob (recommendations + scenario). Null until first regen lands.
+      insights: StrategicInsights | null;
       generatedAt: string | null;
       regenerating: boolean;
     };

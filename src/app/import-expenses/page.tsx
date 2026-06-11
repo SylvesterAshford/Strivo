@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { View, StyleSheet, ActivityIndicator } from "@/rn";
+import { View, StyleSheet } from "@/rn";
 import { useRouter } from "@/rn/router";
 import { useQueryClient } from "@tanstack/react-query";
-import { DocumentPicker } from "@/rn/expo";
 import { Screen } from "@/components/layout/Screen";
+import { ImportDropzone } from "@/components/import/ImportDropzone";
 import { SubHeader } from "@/components/layout/SubHeader";
 import { AppText } from "@/components/ui/AppText";
 import { Button } from "@/components/ui/Button";
@@ -37,6 +37,8 @@ export default function ImportExpensesScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imported, setImported] = useState<number | null>(null);
+  const [skipped, setSkipped] = useState(0);
+  const [fileName, setFileName] = useState<string | null>(null);
 
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ["home"] });
@@ -45,19 +47,14 @@ export default function ImportExpensesScreen() {
     qc.invalidateQueries({ queryKey: ["insights"] });
   };
 
-  const onPickFile = async () => {
+  const onFile = async (asset: { uri: string; name: string; mimeType: string }) => {
     setError(null);
-    const res = await DocumentPicker.getDocumentAsync({
-      type: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel"],
-      copyToCacheDirectory: true,
-    });
-    if (res.canceled || !res.assets?.[0]) return;
-    const asset = res.assets[0];
     setBusy(true);
     try {
-      const data = await importExpensesPreview(asset.uri, asset.name, asset.mimeType ?? "application/octet-stream");
+      const data = await importExpensesPreview(asset.uri, asset.name, asset.mimeType);
       setPreview(data);
       setMapping(data.mapping);
+      setFileName(asset.name);
       setMode("excel");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Preview failed");
@@ -71,8 +68,9 @@ export default function ImportExpensesScreen() {
     setBusy(true);
     setError(null);
     try {
-      const r = await importExpensesConfirm(preview.headers, preview.rows, mapping);
+      const r = await importExpensesConfirm(preview.headers, preview.rows, mapping, fileName ?? undefined);
       setImported(r.inserted);
+      setSkipped(r.skipped);
       invalidateAll();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Import failed");
@@ -102,6 +100,11 @@ export default function ImportExpensesScreen() {
         <SubHeader title={my.importExpenses.title} />
         <View style={styles.successBox}>
           <AppText variant="subhead">{my.importExpenses.imported(imported)}</AppText>
+          {skipped > 0 ? (
+            <AppText variant="body" color="secondary">
+              {my.imports.skipped(skipped)}
+            </AppText>
+          ) : null}
           <Button label={my.common.done} onPress={() => router.replace("/")} />
         </View>
       </Screen>
@@ -205,21 +208,32 @@ export default function ImportExpensesScreen() {
   return (
     <Screen>
       <SubHeader title={my.importExpenses.title} />
-      <AppText variant="body" color="secondary" style={{ marginBottom: spacing["2xl"] }}>
-        {my.importExpenses.subtitle}
-      </AppText>
-
-      <View style={{ gap: spacing.md }}>
-        <Button label={busy ? my.importExpenses.analyzing : my.importExpenses.pickFile} onPress={onPickFile} disabled={busy} />
-        <Button label={my.importExpenses.pasteCta} variant="secondary" onPress={() => setMode("paste")} />
-      </View>
-
-      {busy ? <ActivityIndicator color={colors.accent.base} style={{ marginTop: spacing.lg }} /> : null}
-      {error ? (
-        <AppText variant="caption" style={{ color: colors.semantic.critical, marginTop: spacing.md }}>
-          {error}
+      <View style={{ width: "100%", alignItems: "center" }}>
+      <View style={{ maxWidth: 560, width: "100%" }}>
+        <AppText variant="body" color="secondary" style={{ marginBottom: spacing.xl }}>
+          {my.importExpenses.subtitle}
         </AppText>
-      ) : null}
+
+        <ImportDropzone onFile={onFile} busy={busy} />
+
+        <View
+          style={{
+            marginTop: spacing.xl,
+            paddingTop: spacing.lg,
+            borderTopWidth: 1,
+            borderTopColor: colors.border.hairline,
+          }}
+        >
+          <Button label={my.importExpenses.pasteCta} variant="secondary" onPress={() => setMode("paste")} disabled={busy} />
+        </View>
+
+        {error ? (
+          <AppText variant="caption" style={{ color: colors.semantic.critical, marginTop: spacing.md }}>
+            {error}
+          </AppText>
+        ) : null}
+      </View>
+      </View>
     </Screen>
   );
 }

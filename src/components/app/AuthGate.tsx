@@ -4,7 +4,7 @@ import { useEffect, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProfile } from "@/stores/profile";
-import { clientEnv, isSupabaseConfigured } from "@/lib/client-env";
+import { isSupabaseConfigured } from "@/lib/client-env";
 import { LoadingScreen } from "@/components/layout/LoadingScreen";
 import { decideRedirect } from "./auth-gate-logic";
 import { my } from "@/i18n/my";
@@ -23,7 +23,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
     initializing || syncing
       ? null
       : decideRedirect({
-          bypass: clientEnv.authBypass,
           configured: isSupabaseConfigured(),
           hasSession: !!session,
           onboarded,

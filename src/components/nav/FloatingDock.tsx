@@ -1,6 +1,6 @@
 "use client";
 
-import { View, Pressable, BlurView, LinearGradient, StyleSheet } from "@/rn";
+import { View, Pressable, BlurView, StyleSheet } from "@/rn";
 import { useRouter, usePathname } from "@/rn/router";
 import { DockButton } from "./DockButton";
 import { Icon } from "@/components/ui/Icon";
@@ -21,20 +21,24 @@ export function FloatingDock() {
 
   return (
     <View style={styles.wrap} pointerEvents="box-none">
-      <BlurView intensity={24} tint="light" style={styles.dock}>
+      <BlurView intensity={42} tint="light" style={styles.dock}>
         {TABS.slice(0, MID).map((tab) => (
           <DockButton key={tab.href} icon={tab.icon} isFocused={pathname === tab.href} onPress={() => router.navigate(tab.href)} />
         ))}
 
+        {/* Add data — same liquid-glass violet treatment as the desktop
+            sidebar button: white glass fill, violet outline + icon, soft
+            violet glow. Ties the primary action to the brand identity
+            instead of a heavy dark fill. */}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Add data"
           onPress={() => router.push("/record")}
           style={({ pressed }) => [styles.micWrap, { transform: [{ scale: pressed ? 0.94 : 1 }], opacity: pathname === "/record" ? 0.35 : 1 }]}
         >
-          <LinearGradient colors={colors.gradient.brand} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.mic}>
-            <Icon name="plus" size={26} color={colors.text.onDark} />
-          </LinearGradient>
+          <View style={styles.mic}>
+            <Icon name="plus" size={26} color={colors.identity.purple} />
+          </View>
         </Pressable>
 
         {TABS.slice(MID).map((tab) => (
@@ -65,9 +69,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: colors.border.default,
-    backgroundColor: "rgba(255,255,255,0.6)",
-    boxShadow: "0 8px 24px rgba(124,58,237,0.12)",
+    borderColor: "rgba(255,255,255,0.6)",
+    backgroundColor: "rgba(255,255,255,0.5)",
+    // Apple liquid-glass: bright inset top highlight + soft violet ambient shadow.
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.85), 0 8px 28px rgba(124,58,237,0.16)",
   },
   micWrap: { paddingHorizontal: spacing.md },
   mic: {
@@ -76,6 +81,10 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
-    boxShadow: `0 4px 16px ${colors.accent.glow}`,
+    borderWidth: 1.5,
+    borderColor: colors.identity.border,
+    backgroundColor: "rgba(255,255,255,0.85)",
+    // Liquid glass: bright inset top highlight + soft violet ambient glow.
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.95), 0 4px 16px rgba(124,58,237,0.22)",
   },
 });

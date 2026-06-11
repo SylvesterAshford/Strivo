@@ -3,6 +3,12 @@
 > AI-powered business assistant for Myanmar MSMEs (micro, small & medium enterprises).
 > Burmese-first. Owners log sales/expenses by Excel, text, or manual entry; the app
 > turns raw transactions into financial reports and AI strategic insights.
+>
+> **Host: Vercel, region `pdx1` (us-west-2)** — pinned in `vercel.json`, colocated
+> with the Supabase Postgres project (us-west-2). API handlers make several
+> sequential DB round-trips per request, so compute lives next to the DB, not the
+> user. If the DB ever migrates to ap-southeast-1, switch the pin to `sin1`.
+> Required env vars: see `.env.example`.
 
 ---
 
@@ -16,7 +22,7 @@ Strivo is a **single Next.js app** that serves both the responsive web UI and it
 2. **API** (Next.js Route Handlers under `/api/mobile/v1/*`) — auth, data, and AI
    orchestration, served same-origin to the web app.
 
-Plus three managed cloud services: **Supabase** (auth + edge functions), **Neon** (Postgres), and **Google Gemini** (LLM).
+Plus two managed cloud services: **Supabase** (auth + Postgres + edge functions) and **Google Gemini** (LLM).
 
 > The UI began as an Expo / React Native app and was ported to plain web via a
 > small React-Native-compatibility layer (`src/rn/`) that renders real DOM nodes
@@ -36,7 +42,7 @@ Plus three managed cloud services: **Supabase** (auth + edge functions), **Neon*
           │ Supabase Auth SDK          │          │ Gemini calls
           ▼                            ▼          ▼
 ┌─────────────────────┐    ┌──────────────┐  ┌──────────────────┐
-│  Supabase Auth       │    │ Neon Postgres│  │ Supabase Edge Fn │
+│  Supabase Auth       │    │ Supabase PG  │  │ Supabase Edge Fn │
 │  (Google + email)    │    │ (Drizzle)    │  │  gemini-proxy    │
 └─────────────────────┘    └──────────────┘  └────────┬─────────┘
                                                         │ key rotation
@@ -74,7 +80,7 @@ Plus three managed cloud services: **Supabase** (auth + edge functions), **Neon*
 | Framework | **Next.js** | 16.2.6 | Route Handlers (App Router), Turbopack |
 | Runtime | **React** | 19 | Server components |
 | ORM | **Drizzle ORM** | 0.45 | Type-safe SQL, migrations |
-| DB driver | **postgres** (postgres.js) | 3.4 | Neon connection |
+| DB driver | **postgres** (postgres.js) | 3.4 | Supabase Postgres via Supavisor poolers (txn 6543 runtime / session 5432 migrations) |
 | Validation | **Zod** | 4 | Request body + LLM output schemas |
 | LLM SDK | **@google/genai** | 2.6 | Gemini 2.5 Flash calls |
 | Auth (server) | **@supabase/supabase-js** | 2 | JWT verification, admin API |
@@ -83,7 +89,7 @@ Plus three managed cloud services: **Supabase** (auth + edge functions), **Neon*
 
 | Service | Role |
 |---|---|
-| **Neon** | Serverless Postgres (auto-suspend, branching) |
+| **Supabase Postgres** | Managed Postgres (us-west-2), RLS workspace isolation, Supavisor pooling |
 | **Supabase Auth** | Identity — Google OAuth + email/password, JWT issuance |
 | **Supabase Edge Functions** | `gemini-proxy` — Deno function that routes Gemini calls with multi-key rotation + failover |
 | **Google Gemini 2.5 Flash** | Fact extraction, financial insights, scenario projection |
@@ -196,7 +202,7 @@ Add-data hub (`/record`).
 |---|---|
 | **Gemini 2.5 Flash over GPT-4/Claude** | 50–100× cheaper per token; sufficient for Burmese extraction + reasoning |
 | **Supabase edge proxy for AI** | Network reliability from Myanmar + free-tier quota stacking via key rotation |
-| **Neon over Supabase Postgres** | Serverless auto-suspend (no idle billing), DB branching for safe migrations |
+| **Supabase Postgres (consolidated)** | One vendor for auth + DB + edge functions; RLS workspace isolation enforced in-database via the `strivo_app` NOBYPASSRLS role |
 | **Burmese-first UI** | Target users are Myanmar shop owners; Noto Sans Myanmar with line-height tuning |
 | **occurredAt vs createdAt** | Historical ledger imports must report on the business date, not the insert date |
 | **Lenient JSON + retry budget** | LLM output is non-deterministic; recover partials instead of failing the whole request |
@@ -206,22 +212,22 @@ Add-data hub (`/record`).
 
 ## 5. Environments & Config
 
-**Server (`.env.local`):**
+**Server (`.env.local` — canonical list in `.env.example`):**
 ```
-DATABASE_URL / DATABASE_URL_OWNER   # Neon connection
+DATABASE_URL                        # Supabase Postgres (Supavisor txn pooler :6543)
 SUPABASE_URL / SUPABASE_ANON_KEY    # JWT verify + proxy auth
-SUPABASE_SERVICE_ROLE_KEY           # admin (account delete, seeding)
-AUTH_BYPASS                         # skip JWT validation in dev (false in prod)
+SUPABASE_SERVICE_ROLE_KEY           # admin scripts only, never app runtime
 GEMINI_API_KEY                      # caller-key fallback
-GEMINI_PROXY_URL                    # Supabase edge function URL
+GEMINI_PROXY_URL                    # Supabase edge function URL (optional)
+SENTRY_DSN                          # server error reporting (optional; unset = no-op)
 ```
 
 **Browser (same `.env.local`, exposed via `NEXT_PUBLIC_`):**
 ```
 NEXT_PUBLIC_SUPABASE_URL / _ANON_KEY   # browser Supabase client
-NEXT_PUBLIC_AUTH_BYPASS                # skip login + onboarding gate (false in prod)
-NEXT_PUBLIC_APP_URL                    # OAuth redirect origin
 ```
+
+Real Supabase auth is always enforced — there is no bypass.
 
 **Edge function secrets:**
 ```
@@ -232,11 +238,11 @@ GEMINI_API_KEYS                     # comma-separated, rotated
 
 ## 6. Cost Profile (serverless, scales with usage)
 
-| Users | Vercel | Neon | Supabase | Gemini | Total/mo |
-|---|---|---|---|---|---|
-| 100 | $0 | $0 | $0 | $1–3 | **$1–3** |
-| 1,000 | $20 | $19 | $25 | $10–30 | **$74–94** |
-| 10,000 | $20–50 | $69–150 | $25–100 | $100–300 | **$214–600** |
+| Users | Vercel | Supabase (auth+DB+edge) | Gemini | Total/mo |
+|---|---|---|---|---|
+| 100 | $0 | $0 | $1–3 | **$1–3** |
+| 1,000 | $20 | $25 | $10–30 | **$55–75** |
+| 10,000 | $20–50 | $25–100+ | $100–300 | **$145–450** |
 
 ~$0.02 AI cost per active user/month. Free tiers cover the first ~100 users at near-zero.
 

@@ -21,23 +21,42 @@ function input(over: Partial<AdvisorInput> = {}): AdvisorInput {
   };
 }
 
-describe("month-window helpers", () => {
-  it("monthBounds spans the containing calendar month", () => {
+describe("month-window helpers (Myanmar time, UTC+6:30)", () => {
+  // MMT month start = MMT-midnight on the 1st = UTC midnight 1st minus 6:30h
+  // = the prior day at 17:30:00 UTC.
+  it("monthBounds spans the containing MMT month", () => {
     const b = monthBounds(new Date("2026-05-15T10:00:00Z"));
-    expect(b.start.toISOString()).toBe("2026-05-01T00:00:00.000Z");
-    expect(b.end.toISOString()).toBe("2026-06-01T00:00:00.000Z");
+    expect(b.start.toISOString()).toBe("2026-04-30T17:30:00.000Z");
+    expect(b.end.toISOString()).toBe("2026-05-31T17:30:00.000Z");
   });
-  it("priorMonthBounds returns the previous month", () => {
+  it("priorMonthBounds returns the previous MMT month", () => {
     const prev = priorMonthBounds(monthBounds(new Date("2026-05-15T10:00:00Z")));
-    expect(prev.start.toISOString()).toBe("2026-04-01T00:00:00.000Z");
-    expect(prev.end.toISOString()).toBe("2026-05-01T00:00:00.000Z");
+    expect(prev.start.toISOString()).toBe("2026-03-31T17:30:00.000Z");
+    expect(prev.end.toISOString()).toBe("2026-04-30T17:30:00.000Z");
   });
   it("priorMonthBounds handles the Dec→Jan year boundary", () => {
     const prev = priorMonthBounds(monthBounds(new Date("2026-01-10T00:00:00Z")));
-    expect(prev.start.toISOString()).toBe("2025-12-01T00:00:00.000Z");
-    expect(prev.end.toISOString()).toBe("2026-01-01T00:00:00.000Z");
+    expect(prev.start.toISOString()).toBe("2025-11-30T17:30:00.000Z");
+    expect(prev.end.toISOString()).toBe("2025-12-31T17:30:00.000Z");
   });
-  it("ym formats YYYY-MM", () => {
+  // CRITICAL regression: the UTC→MMT switch must bucket instants near month-end
+  // by MMT wall-clock, not UTC. A sale at 2026-05-31 23:30 MMT is still May;
+  // 30 minutes later (Jun 1 00:30 MMT) it is June.
+  it("buckets a late-night MMT instant just before month-end into the same month", () => {
+    // 2026-05-31T17:00:00Z = 2026-05-31 23:30 MMT → May
+    expect(ym(new Date("2026-05-31T17:00:00Z"))).toBe("2026-05");
+    expect(monthBounds(new Date("2026-05-31T17:00:00Z")).end.toISOString()).toBe(
+      "2026-05-31T17:30:00.000Z",
+    );
+  });
+  it("rolls an instant just after MMT month-end into the next month", () => {
+    // 2026-05-31T18:00:00Z = 2026-06-01 00:30 MMT → June
+    expect(ym(new Date("2026-05-31T18:00:00Z"))).toBe("2026-06");
+    const b = monthBounds(new Date("2026-05-31T18:00:00Z"));
+    expect(b.start.toISOString()).toBe("2026-05-31T17:30:00.000Z");
+    expect(b.end.toISOString()).toBe("2026-06-30T17:30:00.000Z");
+  });
+  it("ym formats YYYY-MM in MMT", () => {
     expect(ym(new Date("2026-05-09T00:00:00Z"))).toBe("2026-05");
     expect(ym(new Date("2026-12-31T00:00:00Z"))).toBe("2026-12");
   });

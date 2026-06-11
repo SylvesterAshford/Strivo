@@ -116,6 +116,10 @@ export const my = {
     emptySubline: "အရောင်းနှင့် ကုန်ကျစရိတ် ဒေတာ ထည့်ပြီးမှ အစီရင်ခံစာ ပေါ်လာပါမည်",
     setTarget: "လစဉ် ပန်းတိုင် သတ်မှတ်မည်",
     topCustomers: "ထိပ်တန်း ဖောက်သည်များ",
+    topProducts: "အရောင်းရဆုံး ပစ္စည်းများ",
+    unitsSold: (n: number) => `${n} ခု ရောင်းရ`,
+    weekTitle: "ယခု ရက်သတ္တပတ်",
+    outstandingTitle: "ရရန်ကျန်များ",
     categoryBreakdown: "အမျိုးအစား ခွဲခြမ်းစိတ်ဖြာချက်",
     expenseBreakdownTitle: "ကုန်ကျစရိတ် အမျိုးအစားအလိုက်",
     expenseUncategorized: "အခြား",
@@ -218,9 +222,56 @@ export const my = {
     title: "ကိုယ်ရေးအချက်အလက်",
     businessProfile: "လုပ်ငန်း အချက်အလက်",
     channels: "ချိတ်ဆက်မှု လမ်းကြောင်းများ",
-    customers: "ဖောက်သည်များ",
-    suppliers: "ပေးသွင်းသူများ",
     signOut: "ထွက်မည်",
+    changePhoto: "ဓာတ်ပုံ ပြောင်းမည်",
+    photoError: "ဓာတ်ပုံ မတင်နိုင်ပါ",
+  },
+
+  // "Unlock next" recruiting slot — one card max per tab naming the
+  // highest-value missing input (CEO plan 2026-06-11, D3).
+  unlock: {
+    expenses: {
+      title: "ကုန်ကျစရိတ် ထည့်ပါ",
+      body: "ကုန်ကျစရိတ် ထည့်မှ အမြတ် တိကျစွာ တွက်နိုင်ပါမည်",
+      cta: "ကုန်ကျစရိတ် သွင်းမည်",
+    },
+    products: {
+      title: "ပစ္စည်း အချက်အလက် ထည့်ပါ",
+      body: "ဘာအရောင်းရဆုံးလဲ သိရန် ပစ္စည်းကော်လံ ပါသော ဖိုင် သွင်းပါ",
+      cta: "အရောင်းဖိုင် သွင်းမည်",
+    },
+    counterparties: {
+      title: "ဖောက်သည် အမည် ထည့်ပါ",
+      body: "ထိပ်တန်း ဖောက်သည်များ မြင်ရရန် ဖောက်သည်အမည် ပါအောင် သွင်းပါ",
+      cta: "အရောင်းဖိုင် သွင်းမည်",
+    },
+  },
+
+  imports: {
+    title: "သွင်းပြီး မှတ်တမ်းများ",
+    empty: "ဖိုင် သို့မဟုတ် စာသား သွင်းထားခြင်း မရှိသေးပါ",
+    inserted: (n: number) => `ထပ်တိုး ${n}`,
+    skipped: (n: number) => `ရှိပြီးသား ${n}`,
+    dropTitle: "ဖိုင်ကို ဤနေရာသို့ ဆွဲချပါ",
+    dropOr: "သို့မဟုတ် နှိပ်၍ ရွှေးပါ",
+    dropHint: ".xlsx · .xls — 5MB အထိ",
+    dropHintProducts: ".xlsx · .xls · .pdf — 5MB အထိ",
+    dropBusy: "AI က ကော်လံများကို စစ်ဆေးနေသည်…",
+    dropBusyHint: "ခဏစောင့်ပါ — ပုံမှန်အားဖြင့် စက္ကန့်အနည်းငယ်သာ ကြာပါသည်",
+    flagBadDate: "ရက်စွဲ မမှန်ကန်ပါ",
+    flagBadAmount: "ပမာဏ မမှန်ကန်ပါ",
+    flagMissingAmount: "ပမာဏ မပါရှိပါ",
+    flaggedCount: (n: number) => `${n} ကြောင်း စစ်ဆေးရန် လိုအပ်သည်`,
+    deleteTitle: "ဤသွင်းမှတ်တမ်းကို ဖျက်မလား?",
+    deleteBody: "ဤသွင်းခြင်းမှ စာရင်းအားလုံး ပြန်ဖျက်ပါမည်။ ဂဏန်းများ ပြန်ပြောင်းပါမည်။",
+    deleteCta: "ဖျက်မည်",
+    cancel: "မဖျက်ပါ",
+    sourceLabels: {
+      "sales-excel": "အရောင်း Excel",
+      "expenses-excel": "ကုန်ကျ Excel",
+      "sales-text": "အရောင်း စာသား",
+      "expenses-text": "ကုန်ကျ စာသား",
+    } as Record<string, string>,
   },
 
   account: {

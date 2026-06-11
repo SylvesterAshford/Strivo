@@ -6,6 +6,7 @@ import { users, workspaces } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { createId } from "@/lib/id";
 import { env } from "@/lib/env";
+import { captureError } from "@/lib/observability";
 
 // Server-side Supabase client used only to validate tokens. No session is
 // persisted; each request passes its own JWT to auth.getUser().
@@ -30,28 +31,12 @@ function bearerToken(req: Request): string | null {
   return token;
 }
 
-// ── Dev bypass ────────────────────────────────────────────────────────────────
-// In development, skip JWT validation entirely. Controlled by the AUTH_BYPASS
-// env var (defaults true in dev, false in prod).
-const DEV_USER: User = {
-  id: "dev_local_user",
-  aud: "authenticated",
-  role: "authenticated",
-  email: "dev@local.lattice",
-  app_metadata: {},
-  user_metadata: {},
-  created_at: "2024-01-01T00:00:00.000Z",
-};
-
 /**
  * Validate the Supabase JWT on a mobile request. Returns the Supabase user, or
- * null if the header is missing or the token is invalid/expired.
+ * null if the header is missing or the token is invalid/expired. Real auth is
+ * always enforced — there is no bypass.
  */
 export async function authenticateMobileRequest(req: Request): Promise<User | null> {
-  if (env.authBypass) {
-    return DEV_USER;
-  }
-
   const sb = getSupabaseClient();
   if (!sb) return null;
   const token = bearerToken(req);
@@ -70,6 +55,14 @@ export async function authenticateMobileRequest(req: Request): Promise<User | nu
 export async function getOrCreateMobileWorkspace(user: User) {
   return db.transaction(async (tx) => {
     await tx.execute(sql`SELECT set_config('app.user_id', ${user.id}, true)`);
+
+    // Serialize concurrent get-or-create for THIS user. The client fires several
+    // /auth/sync calls in parallel on first load; without this they all see "no
+    // row", then race the inserts — duplicate users_pkey (500) and, worse,
+    // multiple workspaces for one owner. A transaction-scoped advisory lock keyed
+    // on the user id makes same-user calls run serially (different users never
+    // contend); it auto-releases at commit and is safe under transaction pooling.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${user.id}))`);
 
     const existingUser = await tx.query.users.findFirst({
       where: eq(users.id, user.id),
@@ -126,13 +119,27 @@ export async function withMobileAuth<T>(
   const user = await authenticateMobileRequest(req);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const workspace = await getOrCreateMobileWorkspace(user);
+  const route = new URL(req.url).pathname;
+  let workspace: WorkspaceRow;
+  try {
+    workspace = await getOrCreateMobileWorkspace(user);
+  } catch (err) {
+    captureError(err, { route, source: "auth" });
+    throw err;
+  }
 
-  return db.transaction(async (tx) => {
-    await tx.execute(sql`SELECT set_config('app.user_id', ${user.id}, true)`);
-    await tx.execute(sql`SELECT set_config('app.workspace_id', ${workspace.id}, true)`);
-    return fn(tx, workspace, user);
-  });
+  try {
+    return await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT set_config('app.user_id', ${user.id}, true)`);
+      await tx.execute(sql`SELECT set_config('app.workspace_id', ${workspace.id}, true)`);
+      return fn(tx, workspace, user);
+    });
+  } catch (err) {
+    // Tag with the workspace while we still know it, then rethrow so the
+    // route 500s and onRequestError sees it too (Sentry dedupes by event).
+    captureError(err, { route, workspaceId: workspace.id });
+    throw err;
+  }
 }
 
 /**

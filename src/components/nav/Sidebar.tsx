@@ -3,15 +3,27 @@
 import { View, Pressable, Image, StyleSheet } from "@/rn";
 import { useRouter, usePathname } from "@/rn/router";
 import { AppText } from "@/components/ui/AppText";
+import { Eyebrow } from "@/components/ui/Eyebrow";
 import { Icon, type IconName } from "@/components/ui/Icon";
 import { colors, spacing, radius } from "@/theme/tokens";
 import { my } from "@/i18n/my";
 
-const NAV: { href: string; icon: IconName; label: string }[] = [
-  { href: "/", icon: "home", label: my.nav.home },
-  { href: "/reports", icon: "reports", label: my.nav.reports },
-  { href: "/analytics", icon: "analytics", label: my.nav.analytics },
-  { href: "/profile", icon: "profile", label: my.nav.profile },
+// Nav grouped into labeled sections (like the reference sidebar): the daily
+// financial work vs. the account. English mono-caps eyebrows match the app's
+// existing section-label convention (RECENT, ACCOUNT).
+const SECTIONS: { label: string; items: { href: string; icon: IconName; label: string }[] }[] = [
+  {
+    label: "WORKFLOW",
+    items: [
+      { href: "/", icon: "home", label: my.nav.home },
+      { href: "/reports", icon: "reports", label: my.nav.reports },
+      { href: "/analytics", icon: "analytics", label: my.nav.analytics },
+    ],
+  },
+  {
+    label: "MANAGE",
+    items: [{ href: "/profile", icon: "profile", label: my.nav.profile }],
+  },
 ];
 
 // Desktop-only left navigation (hidden under 1024px via the .app-sidebar class).
@@ -29,31 +41,51 @@ export function Sidebar() {
         <AppText style={styles.wordmark}>Strivo</AppText>
       </View>
 
-      {/* Add data — primary action */}
-      <Pressable onPress={() => router.push("/record")} style={({ pressed }) => [styles.addBtn, pressed && { opacity: 0.9 }]}>
-        <Icon name="plus" size={18} color={colors.text.onDark} />
-        <AppText variant="bodyMedium" color="onDark" style={{ marginLeft: spacing.sm }}>
+      {/* Add data — primary action. White with a liquid-glass violet outline
+          (not a heavy black fill), so it sits lightly in the nav and ties to
+          the brand. The fill stays white per the theme rule. */}
+      <Pressable
+        onPress={() => router.push("/record")}
+        className="btn-glass"
+        style={({ pressed }) => [styles.addBtn, pressed && { transform: [{ scale: 0.99 }] }]}
+      >
+        <Icon name="plus" size={18} color={colors.identity.purple} />
+        <AppText variant="bodyMedium" color="primary" style={{ marginLeft: spacing.sm }}>
           {my.addData.title}
         </AppText>
       </Pressable>
 
-      {/* Nav */}
-      <View style={{ gap: 2, marginTop: spacing.lg }}>
-        {NAV.map((item) => {
-          const active = isActive(item.href);
-          return (
-            <Pressable
-              key={item.href}
-              onPress={() => router.navigate(item.href)}
-              style={({ pressed }) => [styles.navItem, active && styles.navItemActive, pressed && !active && { backgroundColor: colors.bg.elevated }]}
-            >
-              <Icon name={item.icon} size={20} color={active ? colors.accent.base : colors.text.secondary} />
-              <AppText variant="bodyMedium" style={{ marginLeft: spacing.md, color: active ? colors.text.primary : colors.text.secondary }}>
-                {item.label}
-              </AppText>
-            </Pressable>
-          );
-        })}
+      {/* Nav — grouped into labeled sections. Active item is a floating glass
+          pill with the violet identity accent on icon + label. */}
+      <View style={{ marginTop: spacing.lg, gap: spacing.xl }}>
+        {SECTIONS.map((section) => (
+          <View key={section.label} style={{ gap: 2 }}>
+            <Eyebrow style={{ marginBottom: spacing.sm, marginLeft: spacing.md }}>{section.label}</Eyebrow>
+            {section.items.map((item) => {
+              const active = isActive(item.href);
+              return (
+                <Pressable
+                  key={item.href}
+                  onPress={() => router.navigate(item.href)}
+                  className={active ? "nav-glass" : undefined}
+                  style={({ pressed }) => [styles.navItem, pressed && !active && { backgroundColor: colors.bg.elevated }]}
+                >
+                  <Icon name={item.icon} size={20} color={active ? colors.identity.purple : colors.text.secondary} />
+                  <AppText
+                    variant="bodyMedium"
+                    style={{
+                      marginLeft: spacing.md,
+                      color: active ? colors.identity.purple : colors.text.secondary,
+                      fontFamily: active ? "Inter-Medium" : undefined,
+                    }}
+                  >
+                    {item.label}
+                  </AppText>
+                </Pressable>
+              );
+            })}
+          </View>
+        ))}
       </View>
     </View>
   );
@@ -77,13 +109,12 @@ const styles = StyleSheet.create({
     fontFamily: "Inter-Medium",
     fontSize: 19,
     letterSpacing: 0.2,
-    color: colors.text.primary,
+    color: colors.identity.purple,
   },
   addBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.accent.base,
     borderRadius: radius.attentionCard,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
@@ -94,8 +125,5 @@ const styles = StyleSheet.create({
     borderRadius: radius.attentionCard,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
-  },
-  navItemActive: {
-    backgroundColor: colors.accent.soft,
   },
 });

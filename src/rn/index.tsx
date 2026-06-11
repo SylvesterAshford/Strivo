@@ -71,6 +71,51 @@ export function resolveStyle(style: RNStyle): CSSProperties {
   for (const [key, raw] of Object.entries(style as AnyStyle)) {
     if (raw === undefined || raw === null) continue;
     switch (key) {
+      // Expand the RN `flex` shorthand into longhands. Emitting `flex` to the
+      // DOM alongside View's base `flexShrink` makes React warn about mixing
+      // shorthand + longhand, and toggling `flex` across rerenders triggers
+      // "Removing a style property during rerender". RN's `flex: N` (N > 0) means
+      // grow N / shrink 1 / basis 0%; `flex: 0` means grow 0 / shrink 0 / basis
+      // auto (matches react-native-web).
+      case "flex":
+        if (typeof raw === "number") {
+          if (raw > 0) {
+            out.flexGrow = raw;
+            out.flexShrink = 1;
+            out.flexBasis = "0%";
+          } else {
+            out.flexGrow = 0;
+            out.flexShrink = 0;
+            out.flexBasis = "auto";
+          }
+        } else {
+          out.flex = raw;
+        }
+        break;
+      // Expand single-value `margin`/`padding` shorthands into longhands. RN uses
+      // single values here; emitting the shorthand to the DOM next to a longhand
+      // (e.g. marginTop from a merged style) makes React warn on rerender. Expand
+      // in key order so a later explicit longhand still overrides (matches CSS).
+      case "margin":
+        if (typeof raw === "number") {
+          out.marginTop = raw;
+          out.marginRight = raw;
+          out.marginBottom = raw;
+          out.marginLeft = raw;
+        } else {
+          out.margin = raw; // multi-value string (e.g. "10px 20px") — leave as-is
+        }
+        break;
+      case "padding":
+        if (typeof raw === "number") {
+          out.paddingTop = raw;
+          out.paddingRight = raw;
+          out.paddingBottom = raw;
+          out.paddingLeft = raw;
+        } else {
+          out.padding = raw;
+        }
+        break;
       case "paddingVertical":
         out.paddingTop = raw;
         out.paddingBottom = raw;
@@ -187,7 +232,21 @@ export const Text = forwardRef(function Text(
   { style, children, numberOfLines, onPress }: TextProps,
   ref: Ref<HTMLSpanElement>,
 ) {
-  const css: CSSProperties = { margin: 0, padding: 0, ...resolveStyle(style) };
+  // Reset the browser's default span margin/padding with LONGHANDS, not the
+  // `margin`/`padding` shorthands — user styles can carry `marginTop` etc., and
+  // mixing shorthand + longhand on one element makes React warn on rerender
+  // ("Removing marginTop when margin is set").
+  const css: CSSProperties = {
+    marginTop: 0,
+    marginRight: 0,
+    marginBottom: 0,
+    marginLeft: 0,
+    paddingTop: 0,
+    paddingRight: 0,
+    paddingBottom: 0,
+    paddingLeft: 0,
+    ...resolveStyle(style),
+  };
   if (numberOfLines && numberOfLines > 1) {
     css.display = "-webkit-box";
     (css as AnyStyle).WebkitLineClamp = numberOfLines;

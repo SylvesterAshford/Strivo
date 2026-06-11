@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getLLM } from "@/lib/llm";
 
-// Fact kinds the mobile voice pipeline can extract.
+// Fact kinds the extractor can produce (free-text + spreadsheet import).
 export const factKinds = ["sale", "expense", "receivable", "note"] as const;
 export type FactKind = (typeof factKinds)[number];
 
@@ -13,6 +13,10 @@ export const DraftFact = z.object({
   // Expense category (e.g. rent, wages, utilities). Optional and only
   // meaningful for kind="expense".
   category: z.string().max(40).optional(),
+  // Structured product enrichment — only meaningful for kind="sale", and only
+  // when the text actually names a product. Powers "what sells best?".
+  productName: z.string().max(80).optional(),
+  quantity: z.number().int().min(1).max(100_000).optional(),
 });
 
 export type DraftFact = z.infer<typeof DraftFact>;
@@ -28,13 +32,15 @@ const SCHEMA_DESC = `{
       "amountMmk": number (integer, MMK, optional),
       "description": "short description in Burmese or English",
       "counterparty": "customer / supplier name if mentioned (optional)",
-      "category": "expense category (rent, wages, supplies, etc) — only set when kind='expense' (optional)"
+      "category": "expense category (rent, wages, supplies, etc) — only set when kind='expense' (optional)",
+      "productName": "name of the product/item sold — only when kind='sale' and a product is named (optional)",
+      "quantity": number (integer units sold — only when kind='sale' and a count is stated, optional)
     }
   ]
 }`;
 
 const PROMPT_PREFIX = `You are an assistant for a Myanmar small business owner.
-Extract structured business facts from this Burmese voice memo transcript.
+Extract structured business facts from this Burmese business text.
 
 Rules:
 - "sale"       = revenue received (ရောင်းရငွေ, ဝင်ငွေ)
@@ -45,6 +51,8 @@ Rules:
 - description: keep it short (≤ 60 chars), in the language used by the speaker
 - counterparty: name of customer or supplier if mentioned; omit otherwise
 - category: only for kind="expense" — short word/phrase for the expense bucket (ဆိုင်ခ, လုပ်ခ, ပစ္စည်းသွင်း, မီးခ, ရေခ, သယ်ယူခ etc). Omit for non-expense kinds.
+- productName: only for kind="sale" when a product/item is named (e.g. "လက်ဖက်ရည် ၃ ခွက်" → productName "လက်ဖက်ရည်"). Omit otherwise.
+- quantity: only for kind="sale" when a unit count is stated (e.g. "၃ ခွက်" → 3). Omit otherwise.
 - Extract ALL facts; one fact per financial event
 
 Transcript:
